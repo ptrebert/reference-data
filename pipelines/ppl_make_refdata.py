@@ -3,6 +3,7 @@
 import os as os
 import fnmatch as fnm
 import datetime as dt
+import gzip as gz
 
 from ruffus import *
 
@@ -36,6 +37,66 @@ def collect_full_paths(rootdir, pattern):
     return all_files
 
 
+def read_chromsizes(fp):
+    """
+    :param fp:
+    :return:
+    """
+    bounds = dict()
+    with open(fp, 'r') as infile:
+        for line in infile:
+            if not line.strip():
+                continue
+            name, size = line.strip().split()
+            bounds[name] = int(size)
+    assert bounds, 'No boundaries read from file {}'.format(fp)
+    return bounds
+
+
+def open_comp(fp, read=True):
+    """ unnecessary in Python 3.5+
+    :param fp:
+    :return:
+    """
+    if fp.endswith('.gz'):
+        if read:
+            return gz.open, 'rb', lambda x: x.decode('ascii').strip()
+        else:
+            return gz.open, 'wb', lambda x: x.encode('ascii')
+    else:
+        if read:
+            return open, 'r', lambda x: x.strip()
+        else:
+            return open, 'w', lambda x: x
+
+
+def process_std_bedfile(inputfile, outputfile, boundcheck):
+    """
+    :param inputfile:
+    :param outputfile:
+    :param boundcheck:
+    :return:
+    """
+    bounds = read_chromsizes(boundcheck)
+    opn, mode, conv = open_comp(inputfile, True)
+    regions = []
+    with opn(inputfile, mode) as infile:
+        for line in infile:
+            line = conv(line)
+            if not line:
+                continue
+            c, s, e, n = line.split()[:4]
+            try:
+                assert int(e) < bounds[c], 'Region {} out of bounds ({}) in file {}'.format(line, bounds[c], inputfile)
+            except KeyError:
+                # chromosome not in check file, skip over region
+                continue
+
+
+
+
+
+
 def build_pipeline(args, config, sci_obj):
     """
     :param args:
@@ -61,8 +122,8 @@ def build_pipeline(args, config, sci_obj):
 
     csz_rawdata = os.path.join(dir_task_chromsizes, 'rawdata')
     csz_init = pipe.originate(task_func=lambda x: x,
-                              output=collect_full_paths(csz_rawdata, '*.sizes'),
-                              name='csz_init')
+                              name='csz_init',
+                              output=collect_full_paths(csz_rawdata, '*.sizes'))
 
     outdir = os.path.join(dir_task_chromsizes, 'chrom_primary')
     csz_primary = pipe.subdivide(task_func=filter_chromosomes,
@@ -90,5 +151,24 @@ def build_pipeline(args, config, sci_obj):
     #
     # End: major task chromosome sizes
     # ================================
+
+    # ================================
+    # Major task: enhancer
+    #
+    dir_task_enhancer = os.path.join(workdir, 'enhancer')
+
+    enh_rawdata = os.path.join(dir_task_enhancer, 'rawdata')
+    enh_init = pipe.originate(task_func=lambda x: x,
+                              name='enh_init',
+                              output=collect_full_paths(enh_rawdata, '*'))
+
+    #
+    # End: major task chromosome sizes
+    # ================================
+
+    run_all = pipe.merge(task_func=touch_checkfile,
+                         name='run_all',
+                         input=output_from(run_task_csz),
+                         output=os.path.join(workdir, 'run_all_refdata.chk'))
 
     return pipe
