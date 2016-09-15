@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import os as os
+import io as io
 import fnmatch as fnm
 import datetime as dt
 import gzip as gz
@@ -56,6 +57,7 @@ def read_chromsizes(fp):
 def open_comp(fp, read=True):
     """ unnecessary in Python 3.5+
     :param fp:
+    :param read:
     :return:
     """
     if fp.endswith('.gz'):
@@ -88,13 +90,59 @@ def process_std_bedfile(inputfile, outputfile, boundcheck):
             c, s, e, n = line.split()[:4]
             try:
                 assert int(e) < bounds[c], 'Region {} out of bounds ({}) in file {}'.format(line, bounds[c], inputfile)
+                _ = int(s)
+            except ValueError:
+                raise ValueError('Non-integer coordinates in BED file {} in line {}'.format(inputfile, line))
             except KeyError:
                 # chromosome not in check file, skip over region
                 continue
+            regions.append((c, s, e, n))
+    assert regions, 'No regions read from file {}'.format(inputfile)
+    regions = sorted(regions, key=lambda x: (x[0], int(x[1]), int(x[2])))
+    outbuffer = io.StringIO()
+    for reg in regions:
+        outbuffer.write('\t'.join(reg) + '\n')
+    opn, mode, conv = open_comp(outputfile, False)
+    with opn(outputfile, mode) as outf:
+        _ = outf.write(conv(outbuffer.getvalue()))
+    return outputfile
 
 
-
-
+def process_noname_bedfile(inputfile, outputfile, boundcheck, nprefix):
+    """
+    :param inputfile:
+    :param outputfile:
+    :param boundcheck:
+    :param nprefix:
+    :return:
+    """
+    bounds = read_chromsizes(boundcheck)
+    opn, mode, conv = open_comp(inputfile, True)
+    regions = []
+    with opn(inputfile, mode) as infile:
+        for line in infile:
+            line = conv(line)
+            if not line:
+                continue
+            c, s, e = line.split()[:3]
+            try:
+                assert int(e) < bounds[c], 'Region {} out of bounds ({}) in file {}'.format(line, bounds[c], inputfile)
+                _ = int(s)
+            except ValueError:
+                raise ValueError('Non-integer coordinates in BED file {} in line {}'.format(inputfile, line))
+            except KeyError:
+                # chromosome not in check file, skip over region
+                continue
+            regions.append((c, s, e))
+    assert regions, 'No regions read from file {}'.format(inputfile)
+    regions = sorted(regions, key=lambda x: (x[0], int(x[1]), int(x[2])))
+    outbuffer = io.StringIO()
+    for idx, reg in enumerate(regions, start=1):
+        outbuffer.write('\t'.join(reg) + nprefix + str(idx) + '\n')
+    opn, mode, conv = open_comp(outputfile, False)
+    with opn(outputfile, mode) as outf:
+        _ = outf.write(conv(outbuffer.getvalue()))
+    return outputfile
 
 
 def build_pipeline(args, config, sci_obj):
@@ -162,8 +210,46 @@ def build_pipeline(args, config, sci_obj):
                               name='enh_init',
                               output=collect_full_paths(enh_rawdata, '*'))
 
+    outdir = os.path.join(dir_task_enhancer, 'bed_format')
+    enh_super = pipe.transform(task_func=process_std_bedfile,
+                               name='enh_super',
+                               input=output_from(enh_init),
+                               filter=formatter('all_(?P<ASSM>\w+)_bed\.bed'),
+                               output='{ASSM[0]}_enh_super.bed',
+                               output_dir=outdir,
+                               extras=[os.path.join(dir_task_chromsizes,
+                                                    'chrom_primary',
+                                                    '{ASSM[0]}_sizes_primary.tsv')]).mkdir(outdir)
+
+    enh_hsa_fantom = pipe.transform(task_func=process_noname_bedfile,
+                                    name='enh_hsa_fantom',
+                                    input=output_from(enh_init),
+                                    filter=formatter('human_permissive.+'),
+                                    output='hg19_enh_fantom_p1p2.bed',
+                                    output_dir=outdir,
+                                    extras=[os.path.join(dir_task_chromsizes,
+                                                         'chrom_primary',
+                                                         'hg19_sizes_primary.tsv'),
+                                            'hFE_']).mkdir(outdir)
+
+    enh_mmu_fantom = pipe.transform(task_func=process_noname_bedfile,
+                                    name='enh_hsa_fantom',
+                                    input=output_from(enh_init),
+                                    filter=formatter('mouse_permissive.+'),
+                                    output='mm9_enh_fantom_p1p2.bed',
+                                    output_dir=outdir,
+                                    extras=[os.path.join(dir_task_chromsizes,
+                                                         'chrom_primary',
+                                                         'mm9_sizes_primary.tsv'),
+                                            'mFE_']).mkdir(outdir)
+
+    run_task_enh = pipe.merge(task_func=touch_checkfile,
+                              name='run_task_enh',
+                              input=output_from(enh_super,
+                                                enh_hsa_fantom, enh_mmu_fantom),
+                              output=os.path.join(dir_task_enhancer, 'run_task_enh.chk'))
     #
-    # End: major task chromosome sizes
+    # End: major task enhancer
     # ================================
 
     run_all = pipe.merge(task_func=touch_checkfile,
