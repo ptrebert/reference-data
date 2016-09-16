@@ -2,13 +2,13 @@
 
 import os as os
 import io as io
-import fnmatch as fnm
 import datetime as dt
-import gzip as gz
 
 from ruffus import *
 
+from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
 from pipelines.auxmod.chromsizes import filter_chromosomes
+from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 
 
 def touch_checkfile(inputfiles, outputfile):
@@ -21,55 +21,6 @@ def touch_checkfile(inputfiles, outputfile):
     with open(outputfile, 'w') as outf:
         _ = outf.write(timestr + '\n')
     return outputfile
-
-
-def collect_full_paths(rootdir, pattern):
-    """
-    :param rootdir:
-    :param pattern:
-    :return:
-    """
-    all_files = []
-    for root, dirs, files in os.walk(rootdir):
-        if files:
-            filt = fnm.filter(files, pattern)
-            for f in filt:
-                all_files.append(os.path.join(root, f))
-    return all_files
-
-
-def read_chromsizes(fp):
-    """
-    :param fp:
-    :return:
-    """
-    bounds = dict()
-    with open(fp, 'r') as infile:
-        for line in infile:
-            if not line.strip():
-                continue
-            name, size = line.strip().split()
-            bounds[name] = int(size)
-    assert bounds, 'No boundaries read from file {}'.format(fp)
-    return bounds
-
-
-def open_comp(fp, read=True):
-    """ unnecessary in Python 3.5+
-    :param fp:
-    :param read:
-    :return:
-    """
-    if fp.endswith('.gz'):
-        if read:
-            return gz.open, 'rb', lambda x: x.decode('ascii').strip()
-        else:
-            return gz.open, 'wb', lambda x: x.encode('ascii')
-    else:
-        if read:
-            return open, 'r', lambda x: x.strip()
-        else:
-            return open, 'w', lambda x: x
 
 
 def process_std_bedfile(inputfile, outputfile, boundcheck):
@@ -138,7 +89,7 @@ def process_noname_bedfile(inputfile, outputfile, boundcheck, nprefix):
     regions = sorted(regions, key=lambda x: (x[0], int(x[1]), int(x[2])))
     outbuffer = io.StringIO()
     for idx, reg in enumerate(regions, start=1):
-        outbuffer.write('\t'.join(reg) + nprefix + str(idx) + '\n')
+        outbuffer.write('\t'.join(reg) + '\t' + nprefix + str(idx) + '\n')
     opn, mode, conv = open_comp(outputfile, False)
     with opn(outputfile, mode) as outf:
         _ = outf.write(conv(outbuffer.getvalue()))
@@ -204,6 +155,7 @@ def build_pipeline(args, config, sci_obj):
     # Major task: enhancer
     #
     dir_task_enhancer = os.path.join(workdir, 'enhancer')
+    temp_task_enhancer = os.path.join(dir_task_enhancer, 'temp')
 
     enh_rawdata = os.path.join(dir_task_enhancer, 'rawdata')
     enh_init = pipe.originate(task_func=lambda x: x,
@@ -215,38 +167,102 @@ def build_pipeline(args, config, sci_obj):
                                name='enh_super',
                                input=output_from(enh_init),
                                filter=formatter('all_(?P<ASSM>\w+)_bed\.bed'),
-                               output='{ASSM[0]}_enh_super.bed',
-                               output_dir=outdir,
+                               output=os.path.join(outdir, '{ASSM[0]}_enh_super.bed'),
                                extras=[os.path.join(dir_task_chromsizes,
                                                     'chrom_primary',
                                                     '{ASSM[0]}_sizes_primary.tsv')]).mkdir(outdir)
 
     enh_hsa_fantom = pipe.transform(task_func=process_noname_bedfile,
                                     name='enh_hsa_fantom',
-                                    input=output_from(enh_init),
-                                    filter=formatter('human_permissive.+'),
-                                    output='hg19_enh_fantom_p1p2.bed',
-                                    output_dir=outdir,
+                                    input=os.path.join(enh_rawdata, 'human_permissive_enhancers_phase_1_and_2.bed.gz'),
+                                    filter=formatter(),
+                                    output=os.path.join(outdir, 'hg19_enh_fantom_p1p2.bed'),
                                     extras=[os.path.join(dir_task_chromsizes,
                                                          'chrom_primary',
                                                          'hg19_sizes_primary.tsv'),
                                             'hFE_']).mkdir(outdir)
 
     enh_mmu_fantom = pipe.transform(task_func=process_noname_bedfile,
-                                    name='enh_hsa_fantom',
-                                    input=output_from(enh_init),
-                                    filter=formatter('mouse_permissive.+'),
-                                    output='mm9_enh_fantom_p1p2.bed',
-                                    output_dir=outdir,
+                                    name='enh_mmu_fantom',
+                                    input=os.path.join(enh_rawdata, 'mouse_permissive_enhancers_phase_1_and_2.bed.gz'),
+                                    filter=formatter(),
+                                    output=os.path.join(outdir, 'mm9_enh_fantom_p1p2.bed'),
                                     extras=[os.path.join(dir_task_chromsizes,
                                                          'chrom_primary',
                                                          'mm9_sizes_primary.tsv'),
                                             'mFE_']).mkdir(outdir)
 
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'catgzbed')
+    enh_cat_encode = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
+                                  name='enh_cat_encode',
+                                  input=output_from(enh_init),
+                                  filter=formatter('(?P<SAMPLE>\w+)_(?P<TYPE>predictions)\.bed\.gz$'),
+                                  output=os.path.join(temp_task_enhancer, 'hg19_encode_{TYPE[0]}_union.bed'),
+                                  extras=[cmd, jobcall]).mkdir(temp_task_enhancer)
+
+    cmd = config.get('Pipeline', 'mrgbed')
+    enh_mrg_encode = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='enh_mrg_encode',
+                                    input=output_from(enh_cat_encode),
+                                    filter=suffix('union.bed'),
+                                    output='merged.bed',
+                                    output_dir=temp_task_enhancer,
+                                    extras=[cmd, jobcall])
+
+    enh_hsa_encpp = pipe.transform(task_func=process_merged_encode_enhancer,
+                                   name='enh_hsa_encpp',
+                                   input=output_from(enh_mrg_encode),
+                                   filter=suffix('encode_predictions_merged.bed'),
+                                   output='enh_encode_prox.bed',
+                                   output_dir=outdir,
+                                   extras=[os.path.join(dir_task_chromsizes,
+                                                        'chrom_primary',
+                                                        'hg19_sizes_primary.tsv'),
+                                           'hEE', 'PP']).mkdir(outdir)
+
+    enh_hsa_encdp = pipe.transform(task_func=process_merged_encode_enhancer,
+                                   name='enh_hsa_encdp',
+                                   input=output_from(enh_mrg_encode),
+                                   filter=suffix('encode_predictions_merged.bed'),
+                                   output='enh_encode_dist.bed',
+                                   output_dir=outdir,
+                                   extras=[os.path.join(dir_task_chromsizes,
+                                                        'chrom_primary',
+                                                        'hg19_sizes_primary.tsv'),
+                                           'hEE', 'DP']).mkdir(outdir)
+
+    enh_hsa_vista = pipe.transform(task_func=process_vista_enhancer,
+                                   name='enh_hsa_vista',
+                                   input=os.path.join(enh_rawdata, 'vista_enhancers_hg19_mm9.fa'),
+                                   filter=formatter(),
+                                   output=os.path.join(outdir, 'hg19_enh_vista.bed'),
+                                   extras=[os.path.join(dir_task_chromsizes,
+                                                        'chrom_primary',
+                                                        'hg19_sizes_primary.tsv'),
+                                           'hVE', 'Human']).mkdir(outdir)
+
+    enh_mmu_vista = pipe.transform(task_func=process_vista_enhancer,
+                                   name='enh_mmu_vista',
+                                   input=os.path.join(enh_rawdata, 'vista_enhancers_hg19_mm9.fa'),
+                                   filter=formatter(),
+                                   output=os.path.join(outdir, 'mm9_enh_vista.bed'),
+                                   extras=[os.path.join(dir_task_chromsizes,
+                                                        'chrom_primary',
+                                                        'mm9_sizes_primary.tsv'),
+                                           'mVE', 'Mouse']).mkdir(outdir)
+
     run_task_enh = pipe.merge(task_func=touch_checkfile,
                               name='run_task_enh',
                               input=output_from(enh_super,
-                                                enh_hsa_fantom, enh_mmu_fantom),
+                                                enh_hsa_fantom, enh_mmu_fantom,
+                                                enh_cat_encode, enh_mrg_encode, enh_hsa_encpp, enh_hsa_encdp,
+                                                enh_hsa_vista, enh_mmu_vista),
                               output=os.path.join(dir_task_enhancer, 'run_task_enh.chk'))
     #
     # End: major task enhancer
@@ -254,7 +270,7 @@ def build_pipeline(args, config, sci_obj):
 
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
-                         input=output_from(run_task_csz),
+                         input=output_from(run_task_csz, run_task_enh),
                          output=os.path.join(workdir, 'run_all_refdata.chk'))
 
     return pipe
