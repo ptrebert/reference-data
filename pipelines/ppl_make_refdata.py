@@ -9,6 +9,7 @@ from ruffus import *
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
 from pipelines.auxmod.chromsizes import filter_chromosomes
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
+from pipelines.auxmod.cpgislands import process_ucsc_cgi
 
 
 def touch_checkfile(inputfiles, outputfile):
@@ -268,9 +269,39 @@ def build_pipeline(args, config, sci_obj):
     # End: major task enhancer
     # ================================
 
+    # ================================
+    # Major task: CpG islands
+    #
+    dir_task_cpgislands = os.path.join(workdir, 'cpgislands')
+
+    cgi_rawdata = os.path.join(dir_task_cpgislands, 'rawdata')
+    cgi_init = pipe.originate(task_func=lambda x: x,
+                              name='cgi_init',
+                              output=collect_full_paths(cgi_rawdata, '*'))
+
+    outdir = os.path.join(dir_task_cpgislands, 'bed_format')
+    cgi_ucsc = pipe.transform(task_func=process_ucsc_cgi,
+                              name='cgi_ucsc',
+                              input=output_from(cgi_init),
+                              filter=formatter('(?P<ASSM>\w+)_ucsc_cpgislands\.bed\.gz$'),
+                              output=os.path.join(outdir, '{ASSM[0]}_cgi_ucsc.bed'),
+                              extras=[os.path.join(dir_task_chromsizes,
+                                                   'chrom_primary',
+                                                   '{ASSM[0]}_sizes_primary.tsv'),
+                                      'CGI']).mkdir(outdir).jobs_limit(2)
+
+    run_task_cgi = pipe.merge(task_func=touch_checkfile,
+                              name='run_task_cgi',
+                              input=output_from(cgi_ucsc),
+                              output=os.path.join(dir_task_cpgislands, 'run_task_cgi.chk'))
+
+    #
+    # End: major task CpG islands
+    # ================================
+
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
-                         input=output_from(run_task_csz, run_task_enh),
+                         input=output_from(run_task_csz, run_task_enh, run_task_cgi),
                          output=os.path.join(workdir, 'run_all_refdata.chk'))
 
     return pipe
