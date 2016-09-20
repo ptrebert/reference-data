@@ -126,13 +126,13 @@ def build_pipeline(args, config, sci_obj):
                               output=collect_full_paths(csz_rawdata, '*.sizes'))
 
     outdir = os.path.join(dir_task_chromsizes, 'chrom_complete')
-    csz_primary = pipe.subdivide(task_func=filter_chromosomes,
-                                 name='csz_primary',
-                                 input=output_from(csz_init),
-                                 filter=formatter('(?P<ASSM>\w+)\.chrom\.sizes'),
-                                 output=[os.path.join(outdir, '{ASSM[0]}_sizes_chroms.tsv'),
-                                         os.path.join(outdir, '{ASSM[0]}_sizes_chroms.bed')],
-                                 extras=['chr[0-9A-Z]+$']).mkdir(outdir).jobs_limit(2)
+    csz_fullchroms = pipe.subdivide(task_func=filter_chromosomes,
+                                    name='csz_fullchroms',
+                                    input=output_from(csz_init),
+                                    filter=formatter('(?P<ASSM>\w+)\.chrom\.sizes'),
+                                    output=[os.path.join(outdir, '{ASSM[0]}_sizes_chroms.tsv'),
+                                            os.path.join(outdir, '{ASSM[0]}_sizes_chroms.bed')],
+                                    extras=['chr[0-9A-Z]+$']).mkdir(outdir).jobs_limit(2)
 
     outdir = os.path.join(dir_task_chromsizes, 'chrom_auto')
     csz_auto = pipe.subdivide(task_func=filter_chromosomes,
@@ -145,7 +145,7 @@ def build_pipeline(args, config, sci_obj):
 
     run_task_csz = pipe.merge(task_func=touch_checkfile,
                               name='run_task_csz',
-                              input=output_from(csz_primary, csz_auto),
+                              input=output_from(csz_fullchroms, csz_auto),
                               output=os.path.join(dir_task_chromsizes, 'run_task_csz.chk'))
 
     #
@@ -170,8 +170,8 @@ def build_pipeline(args, config, sci_obj):
                                filter=formatter('all_(?P<ASSM>\w+)_bed\.bed'),
                                output=os.path.join(outdir, '{ASSM[0]}_enh_super.bed'),
                                extras=[os.path.join(dir_task_chromsizes,
-                                                    'chrom_primary',
-                                                    '{ASSM[0]}_sizes_primary.tsv')]).mkdir(outdir)
+                                                    'chrom_complete',
+                                                    '{ASSM[0]}_sizes_chroms.tsv')]).mkdir(outdir)
 
     enh_hsa_fantom = pipe.transform(task_func=process_noname_bedfile,
                                     name='enh_hsa_fantom',
@@ -179,8 +179,8 @@ def build_pipeline(args, config, sci_obj):
                                     filter=formatter(),
                                     output=os.path.join(outdir, 'hg19_enh_fantom_p1p2.bed'),
                                     extras=[os.path.join(dir_task_chromsizes,
-                                                         'chrom_primary',
-                                                         'hg19_sizes_primary.tsv'),
+                                                         'chrom_complete',
+                                                         'hg19_sizes_chroms.tsv'),
                                             'hFE_']).mkdir(outdir)
 
     enh_mmu_fantom = pipe.transform(task_func=process_noname_bedfile,
@@ -189,8 +189,8 @@ def build_pipeline(args, config, sci_obj):
                                     filter=formatter(),
                                     output=os.path.join(outdir, 'mm9_enh_fantom_p1p2.bed'),
                                     extras=[os.path.join(dir_task_chromsizes,
-                                                         'chrom_primary',
-                                                         'mm9_sizes_primary.tsv'),
+                                                         'chrom_complete',
+                                                         'mm9_sizes_chroms.tsv'),
                                             'mFE_']).mkdir(outdir)
 
     sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
@@ -223,8 +223,8 @@ def build_pipeline(args, config, sci_obj):
                                    output='enh_encode_prox.bed',
                                    output_dir=outdir,
                                    extras=[os.path.join(dir_task_chromsizes,
-                                                        'chrom_primary',
-                                                        'hg19_sizes_primary.tsv'),
+                                                        'chrom_complete',
+                                                        'hg19_sizes_chroms.tsv'),
                                            'hEE', 'PP']).mkdir(outdir)
 
     enh_hsa_encdp = pipe.transform(task_func=process_merged_encode_enhancer,
@@ -234,8 +234,8 @@ def build_pipeline(args, config, sci_obj):
                                    output='enh_encode_dist.bed',
                                    output_dir=outdir,
                                    extras=[os.path.join(dir_task_chromsizes,
-                                                        'chrom_primary',
-                                                        'hg19_sizes_primary.tsv'),
+                                                        'chrom_complete',
+                                                        'hg19_sizes_chroms.tsv'),
                                            'hEE', 'DP']).mkdir(outdir)
 
     enh_hsa_vista = pipe.transform(task_func=process_vista_enhancer,
@@ -244,8 +244,8 @@ def build_pipeline(args, config, sci_obj):
                                    filter=formatter(),
                                    output=os.path.join(outdir, 'hg19_enh_vista.bed'),
                                    extras=[os.path.join(dir_task_chromsizes,
-                                                        'chrom_primary',
-                                                        'hg19_sizes_primary.tsv'),
+                                                        'chrom_complete',
+                                                        'hg19_sizes_chroms.tsv'),
                                            'hVE', 'Human']).mkdir(outdir)
 
     enh_mmu_vista = pipe.transform(task_func=process_vista_enhancer,
@@ -254,8 +254,8 @@ def build_pipeline(args, config, sci_obj):
                                    filter=formatter(),
                                    output=os.path.join(outdir, 'mm9_enh_vista.bed'),
                                    extras=[os.path.join(dir_task_chromsizes,
-                                                        'chrom_primary',
-                                                        'mm9_sizes_primary.tsv'),
+                                                        'chrom_complete',
+                                                        'mm9_sizes_chroms.tsv'),
                                            'mVE', 'Mouse']).mkdir(outdir)
 
     run_task_enh = pipe.merge(task_func=touch_checkfile,
@@ -286,8 +286,8 @@ def build_pipeline(args, config, sci_obj):
                               filter=formatter('(?P<ASSM>\w+)_ucsc_cpgislands\.bed\.gz$'),
                               output=os.path.join(outdir, '{ASSM[0]}_cgi_ucsc.bed'),
                               extras=[os.path.join(dir_task_chromsizes,
-                                                   'chrom_primary',
-                                                   '{ASSM[0]}_sizes_primary.tsv'),
+                                                   'chrom_complete',
+                                                   '{ASSM[0]}_sizes_chroms.tsv'),
                                       'CGI']).mkdir(outdir).jobs_limit(2)
 
     run_task_cgi = pipe.merge(task_func=touch_checkfile,
