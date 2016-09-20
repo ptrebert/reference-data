@@ -125,13 +125,13 @@ def build_pipeline(args, config, sci_obj):
                               name='csz_init',
                               output=collect_full_paths(csz_rawdata, '*.sizes'))
 
-    outdir = os.path.join(dir_task_chromsizes, 'chrom_primary')
+    outdir = os.path.join(dir_task_chromsizes, 'chrom_complete')
     csz_primary = pipe.subdivide(task_func=filter_chromosomes,
                                  name='csz_primary',
                                  input=output_from(csz_init),
                                  filter=formatter('(?P<ASSM>\w+)\.chrom\.sizes'),
-                                 output=[os.path.join(outdir, '{ASSM[0]}_sizes_primary.tsv'),
-                                         os.path.join(outdir, '{ASSM[0]}_sizes_primary.bed')],
+                                 output=[os.path.join(outdir, '{ASSM[0]}_sizes_chroms.tsv'),
+                                         os.path.join(outdir, '{ASSM[0]}_sizes_chroms.bed')],
                                  extras=['chr[0-9A-Z]+$']).mkdir(outdir).jobs_limit(2)
 
     outdir = os.path.join(dir_task_chromsizes, 'chrom_auto')
