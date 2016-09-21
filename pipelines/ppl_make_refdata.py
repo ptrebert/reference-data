@@ -6,7 +6,8 @@ import datetime as dt
 
 from ruffus import *
 
-from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
+from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths,\
+    collect_region_stats
 from pipelines.auxmod.chromsizes import filter_chromosomes
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
@@ -258,12 +259,24 @@ def build_pipeline(args, config, sci_obj):
                                                         'mm9_sizes_chroms.tsv'),
                                            'mVE', 'Mouse']).mkdir(outdir)
 
+    outdir = os.path.join(workdir, 'stats')
+    enh_stats = pipe.transform(task_func=collect_region_stats,
+                               name='enh_stats',
+                               input=output_from(enh_mmu_vista, enh_hsa_vista,
+                                                 enh_hsa_fantom, enh_mmu_fantom,
+                                                 enh_hsa_encdp, enh_hsa_encpp,
+                                                 enh_super),
+                               filter=suffix('.bed'),
+                               output='.tsv',
+                               output_dir=outdir).mkdir(outdir).jobs_limit(2)
+
     run_task_enh = pipe.merge(task_func=touch_checkfile,
                               name='run_task_enh',
                               input=output_from(enh_super,
                                                 enh_hsa_fantom, enh_mmu_fantom,
                                                 enh_cat_encode, enh_mrg_encode, enh_hsa_encpp, enh_hsa_encdp,
-                                                enh_hsa_vista, enh_mmu_vista),
+                                                enh_hsa_vista, enh_mmu_vista,
+                                                enh_stats),
                               output=os.path.join(dir_task_enhancer, 'run_task_enh.chk'))
     #
     # End: major task enhancer

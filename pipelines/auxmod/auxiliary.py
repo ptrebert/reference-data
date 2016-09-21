@@ -2,6 +2,7 @@
 
 import os as os
 import gzip as gz
+import numpy as np
 import fnmatch as fnm
 
 
@@ -42,7 +43,7 @@ def open_comp(fp, read=True):
     :param read:
     :return:
     """
-    if fp.endswith('.gz'):
+    if fp.endswith('.gz') or fp.endswith('.gzip'):
         if read:
             return gz.open, 'rb', lambda x: x.decode('ascii').strip()
         else:
@@ -74,3 +75,32 @@ def check_bounds(chrom, start, end, bounds, fname):
         # chromosome not in check file, skip
         pass
     return good
+
+
+def collect_region_stats(inputfile, outputfile):
+    """
+    :param inputfile:
+    :param outputfile:
+    :return:
+    """
+    opn, mode, enc = open_comp(inputfile, True)
+    lens = []
+    with opn(inputfile, mode) as infile:
+        for line in infile:
+            line = enc(line)
+            if not line or line.startswith('#'):
+                continue
+            cols = line.split()
+            lens.append(int(cols[2]) - int(cols[1]))
+    assert lens, 'No regions read from file {}'.format(inputfile)
+    percentiles = [0, 5, 25, 50, 75, 95, 100]
+    header = ['name', 'num_regions']
+    for pct in percentiles:
+        header.append('pct_' + str(pct).zfill(3))
+    scores = np.percentile(lens, percentiles)
+    infos = [os.path.basename(inputfile), '{}'.format(len(lens))] + [str(int(s)) for s in scores]
+    opn, mode, enc = open_comp(outputfile, False)
+    with opn(outputfile, mode) as outfile:
+        _ = outfile.write(enc('\t'.join(header) + '\n'))
+        _ = outfile.write(enc('\t'.join(infos) + '\n'))
+    return outputfile
