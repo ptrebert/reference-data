@@ -94,3 +94,4 @@ def process_vista_enhancer(inputfile, outputfile, boundcheck, nprefix, species):
     with opn(outputfile, mode) as outf:
         _ = outf.write(conv(outbuffer.getvalue()))
     return outputfile
+
