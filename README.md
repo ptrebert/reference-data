@@ -43,8 +43,9 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-07-11	http://hgdownload.soe.ucsc.edu/goldenPath/susScr2/database/ensemblToGeneName.txt.gz
 - 2016-08-23	https://groups.google.com/a/soe.ucsc.edu/d/msg/genome/diLb_BKSr9Q/SchnwWBa7loJ [track version - info about Ensembl version]
 - 2016-09-15	http://zlab-annotations.umassmed.edu/enhancers/20160915-084003-enhancer-like-hg19-BothDNaseAndH3K27ac.v3.zip
-- 2016-09-15	http://enhancer.lbl.gov/frnt_page_n.shtml [no stable URLs for dataset available]
+- 2016-09-15	http://enhancer.lbl.gov/frnt_page_n.shtml [no stable URLs for VISTA dataset available]
 - 2016-09-15	http://bioinfo.au.tsinghua.edu.cn/dbsuper/data/bed/mm9/all_mm9_bed.zip
 - 2016-09-15	http://bioinfo.au.tsinghua.edu.cn/dbsuper/data/bed/hg19/all_hg19_bed.bed
 - 2016-09-15	http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all CpG islands]
+- 2016-10-03    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all assembly gaps]
 
