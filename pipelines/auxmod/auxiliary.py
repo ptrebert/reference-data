@@ -2,7 +2,7 @@
 
 import os as os
 import gzip as gz
-import numpy as np
+#import numpy as np
 import fnmatch as fnm
 
 

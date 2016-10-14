@@ -8,9 +8,6 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.2bit
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/bigZips/mm9.2bit
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/bosTau7/bigZips/bosTau7.2bit
-- 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/bosTau7/bigZips/bosTau7.chrom.sizes
-- 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.chrom.sizes
-- 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/bigZips/mm9.chrom.sizes
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToBosTau7.over.chain.gz
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToBosTau7.over.chain.gz
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/liftOver/hg19ToPanTro3.over.chain.gz
@@ -20,13 +17,9 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToPanTro3.over.chain.gz
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToHg19.over.chain.gz
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/vsSelf/hg19.hg19.all.chain.gz [renamed]
-- 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/danRer7/bigZips/danRer7.chrom.sizes
-- 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/panTro3/bigZips/panTro3.chrom.sizes
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/panTro3/bigZips/panTro3.2bit
 - 2016-02-15	http://hgdownload.soe.ucsc.edu/goldenPath/susScr2/bigZips/susScr2.2bit
-- 2016-02-15	http://hgdownload.soe.ucsc.edu/goldenPath/susScr2/bigZips/susScr2.chrom.sizes
 - 2016-04-04	http://hgdownload.soe.ucsc.edu/goldenPath/canFam3/bigZips/canFam3.2bit
-- 2016-04-04	http://hgdownload.soe.ucsc.edu/goldenPath/canFam3/bigZips/canFam3.chrom.sizes
 - 2016-05-10	http://fantom.gsc.riken.jp/5/datafiles/latest/extra/Enhancers/human_permissive_enhancers_phase_1_and_2.bed.gz
 - 2016-05-10	http://fantom.gsc.riken.jp/5/datafiles/latest/extra/Enhancers/mouse_permissive_enhancers_phase_1_and_2.bed.gz
 - 2016-05-24	ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M1/gencode.vM1.annotation.gtf.gz
@@ -48,4 +41,5 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-09-15	http://bioinfo.au.tsinghua.edu.cn/dbsuper/data/bed/hg19/all_hg19_bed.bed
 - 2016-09-15	http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all CpG islands]
 - 2016-10-03    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all assembly gaps]
+- 2016-10-14    ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
 

@@ -1,0 +1,11 @@
+name: pplref
+channels:
+  - bioconda
+dependencies:
+  - python=3.5
+  - numpy=1.11.2
+  - twobitreader
+  - bedtools=2.26.0
+  - grep
+  - p7zip
+  - ucsc-fatotwobit

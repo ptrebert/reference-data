@@ -8,7 +8,6 @@ from ruffus import *
 
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths,\
     collect_region_stats
-from pipelines.auxmod.chromsizes import filter_chromosomes
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
 
@@ -108,45 +107,80 @@ def build_pipeline(args, config, sci_obj):
 
     pipe = Pipeline(name=config.get('Pipeline', 'name'))
 
-    # sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
-    # if args.gridmode:
-    #     jobcall = sci_obj.ruffus_gridjob()
-    # else:
-    #     jobcall = sci_obj.ruffus_localjob()
-
     workdir = config.get('Pipeline', 'workdir')
+
+    # ==========================
+    # Major task: handle genomes
+    #
+
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    dir_task_genomes = os.path.join(workdir, 'genomes')
+
+    dir_gen_rawdata = os.path.join(dir_task_genomes, 'rawdata')
+    genomes_raw_init = pipe.originate(task_func=lambda x: x,
+                                      name='genomes_raw_init',
+                                      output=collect_full_paths(dir_gen_rawdata, '*'))
+
+    dir_gen_2bit = os.path.join(dir_task_genomes, 'wg_2bit')
+    cmd = config.get('Pipeline', 'to2bit')
+    gen2bit = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                             name='gen2bit',
+                             input=output_from(genomes_raw_init),
+                             filter=formatter('(?P<ASSEMBLY>[a-zA-Z0-9]+)\.fa\.gz$'),
+                             output=os.path.join(dir_gen_2bit, '{ASSEMBLY[0]}.2bit'),
+                             extras=[cmd, jobcall])
+
+    run_task_genomes = pipe.merge(task_func=touch_checkfile,
+                                  name='task_genomes',
+                                  input=output_from(genomes_raw_init, gen2bit),
+                                  output=os.path.join(dir_task_genomes, 'run_task_genomes.chk'))
+    #
+    # End: major task chromosome sizes
+    # ================================
 
     # ============================
     # Major task: chromosome sizes
     #
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
     dir_task_chromsizes = os.path.join(workdir, 'chromsizes')
 
-    csz_rawdata = os.path.join(dir_task_chromsizes, 'rawdata')
-    csz_init = pipe.originate(task_func=lambda x: x,
-                              name='csz_init',
-                              output=collect_full_paths(csz_rawdata, '*.sizes'))
+    gen2bit_files = pipe.originate(task_func=lambda x: x,
+                                   name='gen2bit_files',
+                                   output=collect_full_paths(dir_gen_2bit, '*.2bit'))
 
-    outdir = os.path.join(dir_task_chromsizes, 'chrom_complete')
-    csz_fullchroms = pipe.subdivide(task_func=filter_chromosomes,
-                                    name='csz_fullchroms',
-                                    input=output_from(csz_init),
-                                    filter=formatter('(?P<ASSM>\w+)\.chrom\.sizes'),
-                                    output=[os.path.join(outdir, '{ASSM[0]}_sizes_chroms.tsv'),
-                                            os.path.join(outdir, '{ASSM[0]}_sizes_chroms.bed')],
-                                    extras=['chr[0-9A-Z]+$']).mkdir(outdir).jobs_limit(2)
+    dir_out_chromwg = os.path.join(dir_task_chromsizes, 'chrom_wg')
+    cmd = config.get('Pipeline', 'chromwg')
+    csz_chromwg = pipe.subdivide(task_func=sci_obj.get_jobf('in_outpair'),
+                                 name='csz_chromwg',
+                                 input=output_from(gen2bit_files),
+                                 filter=formatter('(?P<ASSM>\w+)\.2bit'),
+                                 output=[os.path.join(dir_out_chromwg, '{ASSM[0]}_chrom_wg.tsv'),
+                                         os.path.join(dir_out_chromwg, '{ASSM[0]}_chrom_wg.bed')],
+                                 extras=[cmd, jobcall]).mkdir(dir_out_chromwg)
 
-    outdir = os.path.join(dir_task_chromsizes, 'chrom_auto')
-    csz_auto = pipe.subdivide(task_func=filter_chromosomes,
-                              name='csz_auto',
-                              input=output_from(csz_init),
-                              filter=formatter('(?P<ASSM>\w+)\.chrom\.sizes'),
-                              output=[os.path.join(outdir, '{ASSM[0]}_sizes_autosomes.tsv'),
-                                      os.path.join(outdir, '{ASSM[0]}_sizes_autosomes.bed')],
-                              extras=['chr[0-9][0-9A-Z]?$']).mkdir(outdir).jobs_limit(2)
+    dir_out_chromauto = os.path.join(dir_task_chromsizes, 'chrom_auto')
+    cmd = config.get('Pipeline', 'chromauto')
+    csz_chromauto = pipe.subdivide(task_func=sci_obj.get_jobf('in_outpair'),
+                                   name='csz_chromauto',
+                                   input=output_from(gen2bit_files),
+                                   filter=formatter('(?P<ASSM>\w+)\.2bit'),
+                                   output=[os.path.join(dir_out_chromauto, '{ASSM[0]}_chrom_auto.tsv'),
+                                           os.path.join(dir_out_chromauto, '{ASSM[0]}_chrom_auto.bed')],
+                                   extras=[cmd, jobcall]).mkdir(dir_out_chromauto)
 
     run_task_csz = pipe.merge(task_func=touch_checkfile,
-                              name='run_task_csz',
-                              input=output_from(csz_fullchroms, csz_auto),
+                              name='task_csz',
+                              input=output_from(csz_chromwg, csz_chromauto),
                               output=os.path.join(dir_task_chromsizes, 'run_task_csz.chk'))
 
     #
