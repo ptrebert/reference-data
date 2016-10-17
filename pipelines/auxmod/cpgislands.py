@@ -1,6 +1,6 @@
 # coding=utf-8
 
-import io as io
+import csv as csv
 
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, check_bounds
 
@@ -27,13 +27,19 @@ def process_ucsc_cgi(inputfile, outputfile, boundcheck, nprefix):
             if not stat:
                 # chromosome not in check file, otherwise raises
                 continue
-            regions.append((c, s, e))
+            regions.append(line.strip().split('\t')[1:])
     assert regions, 'No regions read from file {}'.format(inputfile)
     regions = sorted(regions, key=lambda x: (x[0], int(x[1]), int(x[2])))
-    outbuffer = io.StringIO()
+    rowbuffer = []
     for idx, reg in enumerate(regions, start=1):
-        outbuffer.write('\t'.join(reg) + '\t{}_{}\n'.format(nprefix, idx))
+        reg[3] = '{}_{}'.format(nprefix, idx)
+        rowbuffer.append(reg)
     opn, mode, conv = open_comp(outputfile, False)
+    cgi_header = ['#chrom', 'start', 'end', 'name', 'length',
+                  'cpgNum', 'gcNum', 'perCpg', 'perGc', 'obsExp']
     with opn(outputfile, mode) as outf:
-        _ = outf.write(conv(outbuffer.getvalue()))
+        writer = csv.writer(outf, delimiter='\t')
+        writer.writerow(cgi_header)
+        for row in rowbuffer:
+            writer.writerow(row)
     return outputfile

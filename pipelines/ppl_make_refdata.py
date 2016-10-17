@@ -6,10 +6,11 @@ import datetime as dt
 
 from ruffus import *
 
-from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths,\
-    collect_region_stats
+from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
+
+from pipelines.auxmod.project_sarvesh import make_5p_window
 
 
 def touch_checkfile(inputfiles, outputfile):
@@ -140,7 +141,7 @@ def build_pipeline(args, config, sci_obj):
                                   input=output_from(genomes_raw_init, gen2bit),
                                   output=os.path.join(dir_task_genomes, 'run_task_genomes.chk'))
     #
-    # End: major task chromosome sizes
+    # End: major task genomes
     # ================================
 
     # ============================
@@ -186,6 +187,76 @@ def build_pipeline(args, config, sci_obj):
     #
     # End: major task chromosome sizes
     # ================================
+
+    # ================================
+    # Major task: CpG islands
+    #
+    dir_task_cpgislands = os.path.join(workdir, 'cpgislands')
+
+    cgi_rawdata = os.path.join(dir_task_cpgislands, 'rawdata')
+    cgi_init = pipe.originate(task_func=lambda x: x,
+                              name='cgi_init',
+                              output=collect_full_paths(cgi_rawdata, '*'))
+
+    outdir = os.path.join(dir_task_cpgislands, 'bed_format')
+    cgi_ucsc_wg = pipe.transform(task_func=process_ucsc_cgi,
+                                 name='cgi_ucsc_wg',
+                                 input=output_from(cgi_init),
+                                 filter=formatter('(?P<ASSM>\w+)_ucsc_cpgislands\.bed\.gz$'),
+                                 output=os.path.join(outdir, '{ASSM[0]}_cgi_ucsc_wg.bed'),
+                                 extras=[os.path.join(dir_task_chromsizes,
+                                                      'chrom_wg',
+                                                      '{ASSM[0]}_chrom_wg.tsv'),
+                                         'CGI']).mkdir(outdir).jobs_limit(2)
+
+    outdir = os.path.join(dir_task_cpgislands, 'bed_format')
+    cgi_ucsc_auto = pipe.transform(task_func=process_ucsc_cgi,
+                                   name='cgi_ucsc_auto',
+                                   input=output_from(cgi_init),
+                                   filter=formatter('(?P<ASSM>\w+)_ucsc_cpgislands\.bed\.gz$'),
+                                   output=os.path.join(outdir, '{ASSM[0]}_cgi_ucsc_auto.bed'),
+                                   extras=[os.path.join(dir_task_chromsizes,
+                                                        'chrom_auto',
+                                                        '{ASSM[0]}_chrom_auto.tsv'),
+                                           'CGI']).mkdir(outdir).jobs_limit(2)
+
+    run_task_cgi = pipe.merge(task_func=touch_checkfile,
+                              name='task_cgi',
+                              input=output_from(cgi_ucsc_wg, cgi_ucsc_auto),
+                              output=os.path.join(dir_task_cpgislands, 'task_cgi.chk'))
+
+    #
+    # End: major task CpG islands
+    # ================================
+
+    # ===============================
+    # Major task: gene model
+    #
+    dir_task_genemodel = os.path.join(workdir, 'genemodel')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    gm_rawdata = os.path.join(dir_task_genemodel, 'rawdata')
+    gm_init = pipe.originate(task_func=lambda x: x,
+                             name='gm_init',
+                             output=collect_full_paths(gm_rawdata, '*.gtf.gz'))
+
+    bedout = os.path.join(dir_task_genemodel, 'bed_format')
+    cmd = config.get('Pipeline', 'gtftobed')
+    gm_gtftobed = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='gm_gtftobed',
+                                 input=output_from(gm_init),
+                                 filter=suffix('.gtf.gz'),
+                                 output='.bed.gz',
+                                 output_dir=bedout,
+                                 extras=[cmd, jobcall]).mkdir(bedout)
+
+    #
+    # End of major task: gene model
+    # ===============================
 
     # ================================
     # Major task: enhancer
@@ -293,62 +364,82 @@ def build_pipeline(args, config, sci_obj):
                                                         'mm9_sizes_chroms.tsv'),
                                            'mVE', 'Mouse']).mkdir(outdir)
 
-    outdir = os.path.join(workdir, 'stats')
-    enh_stats = pipe.transform(task_func=collect_region_stats,
-                               name='enh_stats',
-                               input=output_from(enh_mmu_vista, enh_hsa_vista,
-                                                 enh_hsa_fantom, enh_mmu_fantom,
-                                                 enh_hsa_encdp, enh_hsa_encpp,
-                                                 enh_super),
-                               filter=suffix('.bed'),
-                               output='.tsv',
-                               output_dir=outdir).mkdir(outdir).jobs_limit(2)
-
     run_task_enh = pipe.merge(task_func=touch_checkfile,
                               name='run_task_enh',
                               input=output_from(enh_super,
                                                 enh_hsa_fantom, enh_mmu_fantom,
                                                 enh_cat_encode, enh_mrg_encode, enh_hsa_encpp, enh_hsa_encdp,
-                                                enh_hsa_vista, enh_mmu_vista,
-                                                enh_stats),
+                                                enh_hsa_vista, enh_mmu_vista),
                               output=os.path.join(dir_task_enhancer, 'run_task_enh.chk'))
     #
     # End: major task enhancer
-    # ================================
-
-    # ================================
-    # Major task: CpG islands
-    #
-    dir_task_cpgislands = os.path.join(workdir, 'cpgislands')
-
-    cgi_rawdata = os.path.join(dir_task_cpgislands, 'rawdata')
-    cgi_init = pipe.originate(task_func=lambda x: x,
-                              name='cgi_init',
-                              output=collect_full_paths(cgi_rawdata, '*'))
-
-    outdir = os.path.join(dir_task_cpgislands, 'bed_format')
-    cgi_ucsc = pipe.transform(task_func=process_ucsc_cgi,
-                              name='cgi_ucsc',
-                              input=output_from(cgi_init),
-                              filter=formatter('(?P<ASSM>\w+)_ucsc_cpgislands\.bed\.gz$'),
-                              output=os.path.join(outdir, '{ASSM[0]}_cgi_ucsc.bed'),
-                              extras=[os.path.join(dir_task_chromsizes,
-                                                   'chrom_complete',
-                                                   '{ASSM[0]}_sizes_chroms.tsv'),
-                                      'CGI']).mkdir(outdir).jobs_limit(2)
-
-    run_task_cgi = pipe.merge(task_func=touch_checkfile,
-                              name='run_task_cgi',
-                              input=output_from(cgi_ucsc),
-                              output=os.path.join(dir_task_cpgislands, 'run_task_cgi.chk'))
-
-    #
-    # End: major task CpG islands
     # ================================
 
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
                          input=output_from(run_task_csz, run_task_enh, run_task_cgi),
                          output=os.path.join(workdir, 'run_all_refdata.chk'))
+
+    # Extra section to create some reference annotation for particular projects
+
+    # Sarvesh: targeted vs dispersed transcription initiation
+    #
+    #
+    dir_project_sarvesh = os.path.join(workdir, 'projects', 'sarvesh')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    proj_srv_init = pipe.originate(task_func=lambda x: x,
+                                   name='proj_srv_init',
+                                   output=collect_full_paths(gm_rawdata, '*v19*.gtf.gz'))
+
+    dir_pcgenes = os.path.join(dir_project_sarvesh, 'pcgenes')
+    cmd = config.get('Pipeline', 'srv_pcgenes')
+    srv_pcgenes = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='srv_pcgenes',
+                                 input=output_from(proj_srv_init),
+                                 filter=suffix('.gtf.gz'),
+                                 output='.bed.gz',
+                                 output_dir=dir_pcgenes,
+                                 extras=[cmd, jobcall]).mkdir(dir_pcgenes)
+
+    srv_1kbwin = pipe.transform(task_func=make_5p_window,
+                                name='srv_1kbwin',
+                                input=output_from(srv_pcgenes),
+                                filter=suffix('.bed.gz'),
+                                output='_5p_1kb.bed.gz',
+                                output_dir=dir_pcgenes,
+                                extras=[500])
+
+    cmd = config.get('Pipeline', 'srv_cgiprom')
+    srv_cgiprom = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='srv_cgiprom',
+                                 input=output_from(srv_1kbwin),
+                                 filter=suffix('.bed.gz'),
+                                 output='_cgi.bed',
+                                 output_dir=dir_pcgenes,
+                                 extras=[cmd, jobcall])
+
+    cmd = config.get('Pipeline', 'srv_noncgi')
+    srv_noncgi = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='srv_noncgi',
+                                input=output_from(srv_1kbwin),
+                                filter=suffix('.bed.gz'),
+                                output='_noncgi.bed',
+                                output_dir=dir_pcgenes,
+                                extras=[cmd, jobcall])
+
+    #
+    # End of project Sarvesh
+    # ======================
+
+    dir_projects = os.path.join(workdir, 'projects')
+    run_projects = pipe.merge(task_func=touch_checkfile,
+                              name='run_projects',
+                              input=output_from(srv_pcgenes, srv_1kbwin, srv_cgiprom, srv_noncgi),
+                              output=os.path.join(dir_projects, 'run_all_projects.chk'))
 
     return pipe
