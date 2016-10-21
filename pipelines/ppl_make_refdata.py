@@ -179,9 +179,19 @@ def build_pipeline(args, config, sci_obj):
                                            os.path.join(dir_out_chromauto, '{ASSM[0]}_chrom_auto.bed')],
                                    extras=[cmd, jobcall]).mkdir(dir_out_chromauto)
 
+    dir_out_chromaugo = os.path.join(dir_task_chromsizes, 'chrom_augo')
+    cmd = config.get('Pipeline', 'chromaugo')
+    csz_chromaugo = pipe.subdivide(task_func=sci_obj.get_jobf('in_outpair'),
+                                   name='csz_chromaugo',
+                                   input=output_from(gen2bit_files),
+                                   filter=formatter('(?P<ASSM>\w+)\.2bit'),
+                                   output=[os.path.join(dir_out_chromaugo, '{ASSM[0]}_chrom_augo.tsv'),
+                                           os.path.join(dir_out_chromaugo, '{ASSM[0]}_chrom_augo.bed')],
+                                   extras=[cmd, jobcall]).mkdir(dir_out_chromaugo)
+
     run_task_csz = pipe.merge(task_func=touch_checkfile,
                               name='task_csz',
-                              input=output_from(csz_chromwg, csz_chromauto),
+                              input=output_from(csz_chromwg, csz_chromauto, csz_chromaugo),
                               output=os.path.join(dir_task_chromsizes, 'run_task_csz.chk'))
 
     #
