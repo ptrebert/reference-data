@@ -416,31 +416,45 @@ def build_pipeline(args, config, sci_obj):
                                  output_dir=dir_pcgenes,
                                  extras=[cmd, jobcall]).mkdir(dir_pcgenes)
 
-    srv_1kbwin = pipe.transform(task_func=make_5p_window,
-                                name='srv_1kbwin',
+    srv_2kbwin = pipe.transform(task_func=make_5p_window,
+                                name='srv_2kbwin',
                                 input=output_from(srv_pcgenes),
                                 filter=suffix('.bed.gz'),
-                                output='_5p_1kb.bed.gz',
+                                output='_5p_2kb.bed.gz',
                                 output_dir=dir_pcgenes,
-                                extras=[500])
+                                extras=[1500, 500])
 
-    cmd = config.get('Pipeline', 'srv_cgiprom')
+    cmd = config.get('Pipeline', 'srv_cgiprom').replace('\n', ' ')
     srv_cgiprom = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                                  name='srv_cgiprom',
-                                 input=output_from(srv_1kbwin),
+                                 input=output_from(srv_2kbwin),
                                  filter=suffix('.bed.gz'),
                                  output='_cgi.bed',
                                  output_dir=dir_pcgenes,
                                  extras=[cmd, jobcall])
 
-    cmd = config.get('Pipeline', 'srv_noncgi')
+    cmd = config.get('Pipeline', 'srv_noncgi').replace('\n', ' ')
     srv_noncgi = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                                 name='srv_noncgi',
-                                input=output_from(srv_1kbwin),
+                                input=output_from(srv_2kbwin),
                                 filter=suffix('.bed.gz'),
                                 output='_noncgi.bed',
                                 output_dir=dir_pcgenes,
                                 extras=[cmd, jobcall])
+
+    cmd = config.get('Pipeline', 'srv_annreg')
+    srv_annreg = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                input=output_from(srv_cgiprom, srv_noncgi),
+                                filter=suffix('.bed'),
+                                output='_feat.bed',
+                                output_dir=dir_pcgenes,
+                                extras=[cmd, jobcall])
+
+    run_project_sarvesh = pipe.merge(task_func=touch_checkfile,
+                                     name='project_sarvesh',
+                                     input=output_from(proj_srv_init, srv_pcgenes, srv_2kbwin,
+                                                       srv_cgiprom, srv_noncgi, srv_annreg),
+                                     output=os.path.join(dir_project_sarvesh, 'run_project_sarvesh.chk'))
 
     #
     # End of project Sarvesh
@@ -449,7 +463,7 @@ def build_pipeline(args, config, sci_obj):
     dir_projects = os.path.join(workdir, 'projects')
     run_projects = pipe.merge(task_func=touch_checkfile,
                               name='run_projects',
-                              input=output_from(srv_pcgenes, srv_1kbwin, srv_cgiprom, srv_noncgi),
+                              input=output_from(srv_pcgenes, srv_2kbwin, srv_cgiprom, srv_noncgi),
                               output=os.path.join(dir_projects, 'run_all_projects.chk'))
 
     return pipe
