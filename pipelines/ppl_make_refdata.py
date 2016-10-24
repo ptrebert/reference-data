@@ -444,6 +444,7 @@ def build_pipeline(args, config, sci_obj):
 
     cmd = config.get('Pipeline', 'srv_annreg')
     srv_annreg = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='srv_annreg',
                                 input=output_from(srv_cgiprom, srv_noncgi),
                                 filter=suffix('.bed'),
                                 output='_feat.bed',

@@ -2,10 +2,12 @@
 # coding=utf-8
 
 import sys as sys
+import os as os
 import traceback as trb
 import argparse as argp
 import csv as csv
 import multiprocessing as mp
+import io as io
 import twobitreader as tbr
 
 
@@ -55,17 +57,22 @@ def vavouri_promoter_class(region):
         start = int(region['start']) + __VAVOURI_OFFSET_UP__
         end = int(region['end']) - __VAVOURI_OFFSET_DOWN__
     assert start < end, 'Invalid region: {} - {} - {}'.format(start, end, region)
-    length = end - start - __VAVOURI_WINDOW__
+    scan_length = end - start - __VAVOURI_WINDOW__
+    reg_length = int(region['end']) - int(region['start'])
     seq = region['seq']
+    assert len(seq) == reg_length, 'Region - sequence mismatch: {} - {}'.format(len(seq), reg_length)
     lcp = 1
     hcp = False
     # +1 here to make it right-inclusive
-    for idx in range(0, length + 1, __VAVOURI_STEPSIZE__):
+    for idx in range(0, scan_length + 1, __VAVOURI_STEPSIZE__):
         subseq = seq[idx:idx+__VAVOURI_WINDOW__].lower()
         gc = get_gc_content(subseq)
         oe = get_obs_exp_ratio(subseq)
         if oe > 0.75 and gc > 55.:
             region['promoter_class'] = 'HCP'
+            assert start + idx + __VAVOURI_WINDOW__ <= end, 'Stepped out of region: {}'.format(start + idx + __VAVOURI_WINDOW__)
+            region['hcp_win_start'] = start + idx
+            region['hcp_win_end'] = start + idx + __VAVOURI_WINDOW__
             hcp = True
             break  # single window enough
         elif oe <= 0.48:
@@ -73,6 +80,8 @@ def vavouri_promoter_class(region):
         else:
             lcp &= 0
     if not hcp:
+        region['hcp_win_start'] = 'n/a'
+        region['hcp_win_end'] = 'n/a'
         if lcp > 0:
             region['promoter_class'] = 'LCP'
         else:
@@ -137,12 +146,28 @@ def parse_command_line():
     parser.add_argument('--output', '-o', type=str, dest='output')
     parser.add_argument('--feature', '-f', type=str, nargs='+',
                         choices=['gc', 'vavouri'], dest='feature')
+    parser.add_argument('--dump-fasta', action='store_true', default=False, dest='dumpfasta')
     parser.add_argument('--worker', '-w', type=int, default=1, dest='worker')
     args = parser.parse_args()
     return args
 
 
-def dump_regions(regions, fieldnames, output):
+def make_fasta_header(region, suffix):
+    """
+    :param region:
+    :return:
+    """
+    header = '>'
+    loc = region['#chrom'] + ':' + str(region['start']) + '-' + str(region['end']) + '|'
+    header += loc
+    header += '|'.join([region['gene_name'], region['gene_id'], region['strand'], region['promoter_class']])
+    if suffix:
+        header += '|' + suffix
+    region['header'] = header
+    return region
+
+
+def dump_regions(regions, fieldnames, output, fasta):
     """
     :param regions:
     :param fieldnames:
@@ -154,6 +179,23 @@ def dump_regions(regions, fieldnames, output):
                                 extrasaction='ignore')
         writer.writeheader()
         writer.writerows(regions)
+    if fasta:
+        # for Sarvesh
+        if '_cgi' in os.path.basename(output):
+            suffix = 'CGI'
+        elif '_noncgi' in os.path.basename(output):
+            suffix = 'nonCGI'
+        else:
+            suffix = ''
+        regions = [make_fasta_header(r, suffix) for r in regions]
+        fabuffer = io.StringIO()
+        for reg in regions:
+            fabuffer.write(reg['header'] + '\n')
+            fabuffer.write(reg['seq'] + '\n\n')
+        base = output.rsplit('.', 1)[0]
+        fastafile = base + '.fa'
+        with open(fastafile, 'w') as outf:
+            _ = outf.write(fabuffer.getvalue())
     return
 
 
@@ -171,9 +213,9 @@ def run_annotate():
                 fields.extend(['gc_pct', 'oe_ratio', 'cpg_pct'])
                 regions = pool.map(generic_gc_features, regions)
             if 'vavouri' in args.feature:
-                fields.extend(['promoter_class', 'promoter_schema'])
+                fields.extend(['promoter_class', 'promoter_schema', 'hcp_win_start', 'hcp_win_end'])
                 regions = pool.map(vavouri_promoter_class, regions)
-        dump_regions(regions, fields, args.output)
+        dump_regions(regions, fields, args.output, args.dumpfasta)
     except Exception as err:
         trb.print_exc()
         sys.stderr.write('\nError: {}\n'.format(err))
