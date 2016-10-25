@@ -252,7 +252,7 @@ def build_pipeline(args, config, sci_obj):
     gm_rawdata = os.path.join(dir_task_genemodel, 'rawdata')
     gm_init = pipe.originate(task_func=lambda x: x,
                              name='gm_init',
-                             output=collect_full_paths(gm_rawdata, '*.gtf.gz'))
+                             output=collect_full_paths(gm_rawdata, '*.gz'))
 
     bedout = os.path.join(dir_task_genemodel, 'bed_format')
     cmd = config.get('Pipeline', 'gtftobed')
@@ -260,6 +260,14 @@ def build_pipeline(args, config, sci_obj):
                                  name='gm_gtftobed',
                                  input=output_from(gm_init),
                                  filter=suffix('.gtf.gz'),
+                                 output='.bed.gz',
+                                 output_dir=bedout,
+                                 extras=[cmd, jobcall]).mkdir(bedout)
+
+    gm_gfftobed = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='gm_gfftobed',
+                                 input=output_from(gm_init),
+                                 filter=suffix('.gff3.gz'),
                                  output='.bed.gz',
                                  output_dir=bedout,
                                  extras=[cmd, jobcall]).mkdir(bedout)
@@ -464,7 +472,7 @@ def build_pipeline(args, config, sci_obj):
     dir_projects = os.path.join(workdir, 'projects')
     run_projects = pipe.merge(task_func=touch_checkfile,
                               name='run_projects',
-                              input=output_from(srv_pcgenes, srv_2kbwin, srv_cgiprom, srv_noncgi),
+                              input=output_from(run_project_sarvesh),
                               output=os.path.join(dir_projects, 'run_all_projects.chk'))
 
     return pipe
