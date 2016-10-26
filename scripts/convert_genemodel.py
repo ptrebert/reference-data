@@ -119,7 +119,7 @@ def read_gtf_line(line):
 
 def read_gff3_line(line):
     """
-    Try to parse a line in the godforsaken GFF3 format
+    Try to parse a line in the goddamn GFF3 format
     w/o loosing any attributes...
     :param line:
     :return:
@@ -148,7 +148,7 @@ def read_gff3_line(line):
             known_fields.add(subkey)
             continue
         elif ',' in v:
-            raise ValueError('Seems like there is a whole list of values: {} in line {}'.format(v, line))
+            raise ValueError('List of values for key {}: {} in line {}'.format(k, v, line))
         else:
             # who knows what crazy stuff could be here...
             pass
