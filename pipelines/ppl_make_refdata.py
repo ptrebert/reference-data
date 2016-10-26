@@ -398,7 +398,11 @@ def build_pipeline(args, config, sci_obj):
                          input=output_from(run_task_csz, run_task_enh, run_task_cgi),
                          output=os.path.join(workdir, 'run_all_refdata.chk'))
 
+    # =========================================================================
+    # =========================================================================
     # Extra section to create some reference annotation for particular projects
+    # =========================================================================
+    # =========================================================================
 
     # Sarvesh: targeted vs dispersed transcription initiation
     #
@@ -459,10 +463,58 @@ def build_pipeline(args, config, sci_obj):
                                 output_dir=dir_pcgenes,
                                 extras=[cmd, jobcall])
 
+    # different gene set: all protein coding
+
+    dir_allgenes = os.path.join(dir_project_sarvesh, 'allgenes')
+    cmd = config.get('Pipeline', 'srv_allgenes')
+    srv_allgenes = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='srv_allgenes',
+                                  input=output_from(proj_srv_init),
+                                  filter=suffix('.gtf.gz'),
+                                  output='.bed.gz',
+                                  output_dir=dir_allgenes,
+                                  extras=[cmd, jobcall]).mkdir(dir_allgenes)
+
+    cmd = config.get('Pipeline', 'srv_extgenes')
+    srv_extgenes = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='srv_extgenes',
+                                  input=output_from(srv_allgenes),
+                                  filter=suffix('.bed.gz'),
+                                  output='_ext1kb.bed.gz',
+                                  output_dir=dir_allgenes,
+                                  extras=[cmd, jobcall])
+
+    cmd = config.get('Pipeline', 'srv_cgidist')
+    srv_cgidist = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='srv_cgidist',
+                                 input=output_from(srv_extgenes),
+                                 filter=formatter(),
+                                 output=os.path.join(dir_allgenes, 'hg19_CGI_gene_distal.bed'),
+                                 extras=[cmd, jobcall])
+
+    cmd = config.get('Pipeline', 'srv_cgiprox')
+    srv_cgiprox = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='srv_cgiprox',
+                                 input=output_from(srv_extgenes),
+                                 filter=formatter(),
+                                 output=os.path.join(dir_allgenes, 'hg19_CGI_gene_proximal.bed'),
+                                 extras=[cmd, jobcall])
+
+    cmd = config.get('Pipeline', 'srv_anncgi')
+    srv_anncgi = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='srv_anncgi',
+                                input=output_from(srv_cgidist, srv_cgiprox),
+                                filter=suffix('.bed'),
+                                output='_feat.bed',
+                                output_dir=dir_allgenes,
+                                extras=[cmd, jobcall])
+
     run_project_sarvesh = pipe.merge(task_func=touch_checkfile,
                                      name='project_sarvesh',
                                      input=output_from(proj_srv_init, srv_pcgenes, srv_2kbwin,
-                                                       srv_cgiprom, srv_noncgi, srv_annreg),
+                                                       srv_cgiprom, srv_noncgi, srv_annreg,
+                                                       srv_allgenes, srv_extgenes, srv_cgidist, srv_cgiprox,
+                                                       srv_anncgi),
                                      output=os.path.join(dir_project_sarvesh, 'run_project_sarvesh.chk'))
 
     #
