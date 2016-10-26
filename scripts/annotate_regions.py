@@ -144,7 +144,7 @@ def parse_command_line():
     parser.add_argument('--input', '-i', type=str, dest='input')
     parser.add_argument('--genome', '-g', type=str, dest='genome')
     parser.add_argument('--output', '-o', type=str, dest='output')
-    parser.add_argument('--feature', '-f', type=str, nargs='+',
+    parser.add_argument('--feature', '-f', type=str, nargs='*',
                         choices=['gc', 'vavouri'], dest='feature')
     parser.add_argument('--dump-fasta', action='store_true', default=False, dest='dumpfasta')
     parser.add_argument('--worker', '-w', type=int, default=1, dest='worker')
@@ -154,13 +154,19 @@ def parse_command_line():
 
 def make_fasta_header(region, suffix):
     """
+    TODO: this function needs to be adapted to be more
+    generic - right now, it makes too many assumptions
+    about available header fields
     :param region:
     :return:
     """
     header = '>'
     loc = region['#chrom'] + ':' + str(region['start']) + '-' + str(region['end']) + '|'
     header += loc
-    header += '|'.join([region['gene_name'], region['gene_id'], region['strand'], region['promoter_class']])
+    try:
+        header += '|'.join([region['gene_name'], region['gene_id'], region['strand'], region['promoter_class']])
+    except KeyError:
+        header += region['name']
     if suffix:
         header += '|' + suffix
     region['header'] = header
@@ -169,6 +175,8 @@ def make_fasta_header(region, suffix):
 
 def dump_regions(regions, fieldnames, output, fasta):
     """
+    TODO: this function needs to be simplified in order to not
+    contain code specific for Sarvesh's project
     :param regions:
     :param fieldnames:
     :param output:
@@ -185,6 +193,10 @@ def dump_regions(regions, fieldnames, output, fasta):
             suffix = 'CGI'
         elif '_noncgi' in os.path.basename(output):
             suffix = 'nonCGI'
+        elif '_distal' in os.path.basename(output):
+            suffix = 'DIST'
+        elif '_proximal' in os.path.basename(output):
+            suffix = 'PROX'
         else:
             suffix = ''
         regions = [make_fasta_header(r, suffix) for r in regions]
