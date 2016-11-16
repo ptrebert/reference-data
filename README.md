@@ -42,4 +42,6 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-09-15	http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all CpG islands]
 - 2016-10-03    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all assembly gaps]
 - 2016-10-14    ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
-
+- 2016-11-16    http://zlab-annotations.umassmed.edu/enhancers/20161116-050327-enhancer-like-mm10-BothDNaseAndH3K27ac.v3.zip
+- 2016-11-16    http://zlab-annotations.umassmed.edu/promoters/20161116-050248-promoter-like-hg19-BothDNaseAndH3K4me3.v3.zip
+- 2016-11-16    http://zlab-annotations.umassmed.edu/promoters/20161116-050313-promoter-like-mm10-BothDNaseAndH3K4me3.v3.zip
