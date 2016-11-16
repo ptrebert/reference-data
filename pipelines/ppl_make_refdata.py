@@ -201,6 +201,11 @@ def build_pipeline(args, config, sci_obj):
     # ================================
     # Major task: CpG islands
     #
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
     dir_task_cpgislands = os.path.join(workdir, 'cpgislands')
 
     cgi_rawdata = os.path.join(dir_task_cpgislands, 'rawdata')
@@ -230,9 +235,17 @@ def build_pipeline(args, config, sci_obj):
                                                         '{ASSM[0]}_chrom_auto.tsv'),
                                            'CGI']).mkdir(outdir).jobs_limit(2)
 
+    cmd = config.get('Pipeline', 'hg19toh37hd')
+    cgi_ucsc_h37 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='cgi_ucsc_h37',
+                                  input=os.path.join(outdir, 'hg19_cgi_ucsc_wg.bed'),
+                                  filter=formatter(),
+                                  output=os.path.join(outdir, 'h37_cgi_ucsc_augo.bed'),
+                                  extras=[cmd, jobcall])
+
     run_task_cgi = pipe.merge(task_func=touch_checkfile,
                               name='task_cgi',
-                              input=output_from(cgi_ucsc_wg, cgi_ucsc_auto),
+                              input=output_from(cgi_ucsc_wg, cgi_ucsc_auto, cgi_ucsc_h37),
                               output=os.path.join(dir_task_cpgislands, 'task_cgi.chk'))
 
     #
