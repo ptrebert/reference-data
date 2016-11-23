@@ -285,6 +285,55 @@ def build_pipeline(args, config, sci_obj):
                                  output_dir=bedout,
                                  extras=[cmd, jobcall]).mkdir(bedout)
 
+    cmd = config.get('Pipeline', 'enstobed').replace('\n', ' ')
+    gm_enstobed = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='gm_enstobed',
+                                 input=output_from(gm_init),
+                                 filter=formatter('ensGene_(?P<ENSVER>v[0-9]+)_UCSC_(?P<SPECIES>[a-z]+)_(?P<ASSM>\w+)\.txt\.gz'),
+                                 output=os.path.join(bedout, '{SPECIES[0]}_{ASSM[0]}_ensembl_{ENSVER[0]}.bed.gz'),
+                                 extras=[cmd, jobcall])
+
+    subout = os.path.join(dir_task_genemodel, 'subsets')
+
+    pc_subset = os.path.join(subout, 'protein_coding')
+    cmd = config.get('Pipeline', 'subpchg19').replace('\n', ' ')
+    gm_pc_hg19 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='gm_pc_hg19',
+                                input=output_from(gm_gtftobed),
+                                filter=formatter('gencode\.(?P<GENCVER>v19)\.annotation\.bed\.gz'),
+                                output=os.path.join(pc_subset, 'hsa_hg19_gencode_{GENCVER[0]}.genes.bed.gz'),
+                                extras=[cmd, jobcall]).mkdir(pc_subset)
+
+    cmd = config.get('Pipeline', 'subpcmm9').replace('\n', ' ')
+    gm_pc_mm9 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                               name='gm_pc_mm9',
+                               input=output_from(gm_gtftobed),
+                               filter=formatter('gencode\.(?P<GENCVER>vM1)\.annotation\.bed\.gz'),
+                               output=os.path.join(pc_subset, 'mmu_mm9_gencode_{GENCVER[0]}.genes.bed.gz'),
+                               extras=[cmd, jobcall]).mkdir(pc_subset)
+
+    cmd = config.get('Pipeline', 'subpcbta').replace('\n', ' ')
+    gm_pc_bta7 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='gm_pc_bta7',
+                                input=output_from(gm_gfftobed),
+                                filter=formatter('Ensembl(?P<ENSVER>75)_.+\.bed\.gz'),
+                                output=os.path.join(pc_subset, 'bta_bosTau7_ensembl_v{ENSVER[0]}.genes.bed.gz'),
+                                extras=[cmd, jobcall]).mkdir(pc_subset)
+
+    cmd = config.get('Pipeline', 'subpcens').replace('\n', ' ')
+    gm_pc_ens = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                               name='gm_pc_ens',
+                               input=output_from(gm_enstobed),
+                               filter=formatter('(?P<ANNOTID>\w+)\.bed\.gz'),
+                               output=os.path.join(pc_subset, '{ANNOTID[0]}.genes.bed.gz'),
+                               extras=[cmd, jobcall]).mkdir(pc_subset)
+
+    run_task_genemodel = pipe.merge(task_func=touch_checkfile,
+                                    name='task_genemodel',
+                                    input=output_from(gm_gtftobed, gm_gfftobed, gm_enstobed,
+                                                      gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens),
+                                    output=os.path.join(dir_task_genemodel, 'run_task_genemodel.chk'))
+
     #
     # End of major task: gene model
     # ===============================
@@ -408,7 +457,7 @@ def build_pipeline(args, config, sci_obj):
 
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
-                         input=output_from(run_task_csz, run_task_enh, run_task_cgi),
+                         input=output_from(run_task_csz, run_task_enh, run_task_cgi, run_task_genemodel),
                          output=os.path.join(workdir, 'run_all_refdata.chk'))
 
     # =========================================================================
