@@ -9,3 +9,4 @@ dependencies:
   - grep
   - p7zip
   - ucsc-fatotwobit
+  - salmon=0.7.2
