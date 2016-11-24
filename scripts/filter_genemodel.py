@@ -8,6 +8,7 @@ import traceback as trb
 import argparse as argp
 import operator as op
 import io as io
+import re as re
 
 
 def det_open_mode(fp, read=True):
@@ -41,6 +42,8 @@ def parse_command_line():
     parser.add_argument('--trans-out', '-to', type=str, dest='transout')
     parser.add_argument('--map-out', '-mo', type=str, dest='mapout')
     parser.add_argument('--input-type', '-ity', type=str, choices=['gencode', 'ensucsc', 'ensbta'], dest='inputtype')
+    parser.add_argument('--gencode-basic', action='store_true', default=False, dest='gencodebasic')
+    parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9X][0-9AB]?$", dest='chrom')
     args = parser.parse_args()
     return args
 
@@ -100,6 +103,8 @@ def select_protein_coding_subset(args):
     genes = []
     transcripts = []
     use_genes = set()
+    basic_set = args.inputtype == 'gencode' and args.gencodebasic
+    chrom_filter = re.compile(args.chrom.strip('"'))
     with opn(args.input, mode) as infile:
         rows = csv.DictReader(infile, delimiter='\t')
         for r in rows:
@@ -109,14 +114,23 @@ def select_protein_coding_subset(args):
                     if int(r['end']) - int(r['start']) < args.genesize:
                         continue
                     this_gene = list(gene_columns(r))
+                    if chrom_filter.match(this_gene[0]) is None:
+                        continue
                     use_genes.add(this_gene[3])
                     genes.append(this_gene)
                 elif feat == 'transcript':
+                    if basic_set:
+                        if r['tag'] != 'basic':
+                            continue
                     this_trans = list(trans_columns(r))
+                    if chrom_filter.match(this_trans[0]) is None:
+                        continue
                     transcripts.append(this_trans)
                 else:
                     continue
     transcripts = [t for t in transcripts if t[-1] in use_genes]
+    genes_with_transcripts = set([t[-1] for t in transcripts])
+    genes = [g for g in genes if g[3] in genes_with_transcripts]
     assert genes, 'No genes selected for protein coding subset'
     assert transcripts, 'No transcripts selected for protein coding subset'
     mapping = io.StringIO()

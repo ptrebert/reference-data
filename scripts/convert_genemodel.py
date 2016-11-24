@@ -11,6 +11,16 @@ import collections as col
 
 
 SHOW_PARSER_WARNING = False
+# The following is (hopefully) correct: GENCODE GTF
+# files are not BED-like (i.e. not 0-based half-open),
+# and I assume the bovine GFF files are neither (but
+# I don't have a gold standard to check against)
+# Since this converter assumes BED-like output, this at least
+# corrects the GENCODE GTF files
+ASSUME_OFFBYONE = False
+# For the Ensembl UCSC files, I assume 0-based coordinates
+# since this is the usual case for data stored in Genome Browser
+# tables
 
 
 def det_open_mode(fp, read=True):
@@ -42,6 +52,7 @@ def parse_command_line():
     parser.add_argument('--filter-size', '-fs', type=int, default=0, dest='filtersize')
     parser.add_argument('--filter-type', '-ft', type=str, default='', dest='filtertype')
     parser.add_argument('--show-warnings', '-w', action='store_true', default=False, dest='warnings')
+    parser.add_argument('--off-by-one', '-obo', action='store_true', default=False, dest='obo')
     parser.add_argument('--ucsc-ensembl', action='store_true', default=False, dest='ucscensembl')
     parser.add_argument('--ensembl-source', type=str, default='', dest='ensemblsource')
     parser.add_argument('--ensembl-name', type=str, default='', dest='ensemblname')
@@ -198,6 +209,8 @@ def read_gtf_line(line):
     :return:
     """
     cols = line.strip().split('\t')
+    if ASSUME_OFFBYONE:
+        cols[3] = str(int(cols[3]) - 1)
     known_fields = set()
     fields = {'chrom': cols[0], 'source': cols[1], 'feature': cols[2],
               'start': cols[3], 'end': cols[4], 'score': cols[5],
@@ -223,6 +236,8 @@ def read_gff3_line(line):
     :return:
     """
     cols = line.strip().split('\t')
+    if ASSUME_OFFBYONE:
+        cols[3] = str(int(cols[3]) - 1)
     known_fields = set()
     fields = {'seqid': cols[0], 'source': cols[1], 'type': cols[2],
               'start': cols[3], 'end': cols[4], 'score': cols[5],
@@ -342,6 +357,8 @@ def run_genemodel_conversion():
     args = parse_command_line()
     global SHOW_PARSER_WARNING
     SHOW_PARSER_WARNING = args.warnings
+    global ASSUME_OFFBYONE
+    ASSUME_OFFBYONE = args.obo
     if '.gtf' in args.input:
         convert_gtf_file(args)
     elif '.gff' in args.input:

@@ -336,7 +336,38 @@ def build_pipeline(args, config, sci_obj):
 
     #
     # End of major task: gene model
-    # ===============================
+    # ================================
+
+    # ================================
+    # Major task: transcript model, Salmon indices
+    #
+    dir_task_transmodel = os.path.join(workdir, 'transcriptome')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    tm_init = pipe.originate(task_func=lambda x: x,
+                             name='tm_init',
+                             output=collect_full_paths(pc_subset, '*.transcripts.bed.gz'))
+
+    dir_tm_fasta = os.path.join(dir_task_transmodel, 'fasta')
+    cmd = config.get('Pipeline', 'tmfasta')
+    tm_fasta = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                              name='tm_fasta',
+                              input=output_from(tm_init),
+                              filter=formatter('(?P<SPECIES>[a-z]+)_(?P<ASSM>[a-z0-9A-Z]+)_(?P<ANNVER>\w+)\.transcripts\.bed\.gz'),
+                              output=os.path.join(dir_tm_fasta, '{SPECIES[0]}_{ASSM[0]}_{ANNVER[0]}.transcripts.fa.gz'),
+                              extras=[cmd, jobcall]).mkdir(dir_tm_fasta)
+
+    run_task_transmodel = pipe.merge(task_func=touch_checkfile,
+                                     name='task_transmodel',
+                                     input=output_from(tm_fasta),
+                                     output=os.path.join(dir_task_transmodel, 'run_task_transmodel.chk')).mkdir(dir_task_transmodel)
+    #
+    # End of major task: transcript model
+    # ====================================
 
     # ================================
     # Major task: enhancer
@@ -457,7 +488,8 @@ def build_pipeline(args, config, sci_obj):
 
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
-                         input=output_from(run_task_csz, run_task_enh, run_task_cgi, run_task_genemodel),
+                         input=output_from(run_task_csz, run_task_enh, run_task_cgi,
+                                           run_task_genemodel, run_task_transmodel),
                          output=os.path.join(workdir, 'run_all_refdata.chk'))
 
     # =========================================================================
