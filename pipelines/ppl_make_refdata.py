@@ -361,9 +361,40 @@ def build_pipeline(args, config, sci_obj):
                               output=os.path.join(dir_tm_fasta, '{SPECIES[0]}_{ASSM[0]}_{ANNVER[0]}.transcripts.fa.gz'),
                               extras=[cmd, jobcall]).mkdir(dir_tm_fasta)
 
+    sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    dir_tm_mapindex = os.path.join(dir_task_transmodel, 'mapindex')
+    cmd = config.get('Pipeline', 'hsaidx31').replace('\n', ' ')
+    tm_idxhsa31 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='tm_idxhsa31',
+                                 input=output_from(tm_fasta),
+                                 filter=formatter('(?P<TRANSCRIPTOME>hsa_hg19_\w+)\.transcripts\.fa\.gz'),
+                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k31.idx/hash.bin',
+                                 extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
+
+    cmd = config.get('Pipeline', 'mmuidx13').replace('\n', ' ')
+    tm_idxmmu13 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='tm_idxmmu13',
+                                 input=output_from(tm_fasta),
+                                 filter=formatter('(?P<TRANSCRIPTOME>mmu_mm9_\w+)\.transcripts\.fa\.gz'),
+                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k13.idx/hash.bin',
+                                 extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
+
+    cmd = config.get('Pipeline', 'genidx19').replace('\n', ' ')
+    tm_idxgen19 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='tm_idxgen19',
+                                 input=output_from(tm_fasta),
+                                 filter=formatter('(?P<TRANSCRIPTOME>(cfa|bta|mmu|ssc)_\w+)\.transcripts\.fa\.gz'),
+                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k19.idx/hash.bin',
+                                 extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
+
     run_task_transmodel = pipe.merge(task_func=touch_checkfile,
                                      name='task_transmodel',
-                                     input=output_from(tm_fasta),
+                                     input=output_from(tm_fasta, tm_idxhsa31, tm_idxmmu13, tm_idxgen19),
                                      output=os.path.join(dir_task_transmodel, 'run_task_transmodel.chk')).mkdir(dir_task_transmodel)
     #
     # End of major task: transcript model
