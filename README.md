@@ -45,3 +45,33 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-11-30    http://zlab-annotations.umassmed.edu/enhancers/20161130-062139-enhancer-like-hg19-BothDNaseAndH3K27ac.v3.zip
 - 2016-11-30    http://zlab-annotations.umassmed.edu/enhancers/20161130-062201-enhancer-like-mm10-BothDNaseAndH3K27ac.v3.zip
 
+## UCSC Chainfiles
+
+### Chains and Nets
+Following the descriptions in the [GenomeWiki](http://genomewiki.ucsc.edu/index.php/Chains_Nets) *(last modified status: 16 April 2015, 19:10)*,
+the process to generate reciprocal best chains/nets generates the following output:
+
+> The reciprocal best process uses that output:
+> the query-referenced (but target-centric / target single-cov) net is turned back into component chains,
+> and then those are netted to get single coverage in the query too;
+> the two outputs of that netting are reciprocal-best in query and target coords.
+> Reciprocal-best nets are symmetrical again.
+
+Additionally, the following naming convention is used by UCSC provided chain/net files:
+
+> a net is single-coverage for target but not for query,
+> unless it has been filtered to be single-coverage on both target and query.
+> By convention we add "rbest" to the net filename in that case.
+
+The generic process to generate reciprocal best/symmetric single coverage files is also documented in the
+[Genome Wiki](http://genomewiki.ucsc.edu/index.php/HowTo:_Syntenic_Net_or_Reciprocal_Best) *(last modified status: 12 January 2016, 19:00)*
+The documentation is incomplete or imprecise or just not error-free - see following paragraph.
+
+The *error* report on the non-symmetric output can be found in this [Google groups thread](https://groups.google.com/a/soe.ucsc.edu/forum/#!topic/genome/vwgVtaXvyug)
+and includes the following statement by the UCSC support:
+
+> Chaining and netting are not simple operations. They may not be symmetrical operations,
+> there may be some slight difference in each direction.
+> I tried taking these results and running them around in another cycle to get comparable bed files
+> in the same coordinate system to see what might be missing, but this led to even more missing bases.
+> Evidently the cycle itself does something to cause bases to go missing.
