@@ -75,3 +75,16 @@ and includes the following statement by the UCSC support:
 > I tried taking these results and running them around in another cycle to get comparable bed files
 > in the same coordinate system to see what might be missing, but this led to even more missing bases.
 > Evidently the cycle itself does something to cause bases to go missing.
+
+Notably, the tool *chainNet* has to be executed with non-default parameters. The defaults are:
+
+1) *-minSpace=N - minimum gap size to fill, default 25*
+2) *-minScore=N - minimum chain score to consider, default 2000.0*
+
+In the script prepared by the UCSC support, these values are set to:
+
+1) *-minSpace=1*
+2) *-minScore=0*
+
+Setting these parameters to non-default values dramatically increases the number of missing bases,
+for unclear reasons.
