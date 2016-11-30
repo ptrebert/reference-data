@@ -16,7 +16,6 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToDanRer7.over.chain.gz
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToPanTro3.over.chain.gz
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/liftOver/mm9ToHg19.over.chain.gz
-- 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/vsSelf/hg19.hg19.all.chain.gz [renamed]
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/panTro3/bigZips/panTro3.2bit
 - 2016-02-15	http://hgdownload.soe.ucsc.edu/goldenPath/susScr2/bigZips/susScr2.2bit
 - 2016-04-04	http://hgdownload.soe.ucsc.edu/goldenPath/canFam3/bigZips/canFam3.2bit
@@ -35,13 +34,14 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-07-11	http://hgdownload.soe.ucsc.edu/goldenPath/susScr2/database/ensGene.txt.gz
 - 2016-07-11	http://hgdownload.soe.ucsc.edu/goldenPath/susScr2/database/ensemblToGeneName.txt.gz
 - 2016-08-23	https://groups.google.com/a/soe.ucsc.edu/d/msg/genome/diLb_BKSr9Q/SchnwWBa7loJ [track version - info about Ensembl version]
-- 2016-09-15	http://zlab-annotations.umassmed.edu/enhancers/20160915-084003-enhancer-like-hg19-BothDNaseAndH3K27ac.v3.zip
 - 2016-09-15	http://enhancer.lbl.gov/frnt_page_n.shtml [no stable URLs for VISTA dataset available]
 - 2016-09-15	http://bioinfo.au.tsinghua.edu.cn/dbsuper/data/bed/mm9/all_mm9_bed.zip
 - 2016-09-15	http://bioinfo.au.tsinghua.edu.cn/dbsuper/data/bed/hg19/all_hg19_bed.bed
 - 2016-09-15	http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all CpG islands]
 - 2016-10-03    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; all assembly gaps]
 - 2016-10-14    ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/technical/reference/phase2_reference_assembly_sequence/hs37d5.fa.gz
-- 2016-11-16    http://zlab-annotations.umassmed.edu/enhancers/20161116-050327-enhancer-like-mm10-BothDNaseAndH3K27ac.v3.zip
-- 2016-11-16    http://zlab-annotations.umassmed.edu/promoters/20161116-050248-promoter-like-hg19-BothDNaseAndH3K4me3.v3.zip
-- 2016-11-16    http://zlab-annotations.umassmed.edu/promoters/20161116-050313-promoter-like-mm10-BothDNaseAndH3K4me3.v3.zip
+- 2016-11-30    http://zlab-annotations.umassmed.edu/promoters/20161130-062049-promoter-like-hg19-BothDNaseAndH3K4me3.v3.zip
+- 2016-11-30    http://zlab-annotations.umassmed.edu/promoters/20161130-062104-promoter-like-mm10-BothDNaseAndH3K4me3.v3.zip
+- 2016-11-30    http://zlab-annotations.umassmed.edu/enhancers/20161130-062139-enhancer-like-hg19-BothDNaseAndH3K27ac.v3.zip
+- 2016-11-30    http://zlab-annotations.umassmed.edu/enhancers/20161130-062201-enhancer-like-mm10-BothDNaseAndH3K27ac.v3.zip
+
