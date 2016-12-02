@@ -44,6 +44,8 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-11-30    http://zlab-annotations.umassmed.edu/promoters/20161130-062104-promoter-like-mm10-BothDNaseAndH3K4me3.v3.zip
 - 2016-11-30    http://zlab-annotations.umassmed.edu/enhancers/20161130-062139-enhancer-like-hg19-BothDNaseAndH3K27ac.v3.zip
 - 2016-11-30    http://zlab-annotations.umassmed.edu/enhancers/20161130-062201-enhancer-like-mm10-BothDNaseAndH3K27ac.v3.zip
+- 2016-12-02    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; phastCons conserved elements] hg19_phastConsElem_vert_46way.tsv.gz
+- 2016-12-02    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; phastCons conserved elements] mm9_phastConsElem_vert_30way.tsv.gz
 
 ## UCSC Chainfiles
 
@@ -58,6 +60,14 @@ the process to generate reciprocal best chains/nets generates the following outp
 > Reciprocal-best nets are symmetrical again.
 
 Additionally, the following naming convention is used by UCSC for pre-computed chain/net files:
+
+> In chain and net lingo, the target is the reference genome sequence and the query is some other genome sequence.
+> For example, if you are viewing Human-Mouse alignments in the Human genome browser, human is the target and mouse is the query.
+
+> The file names reflect the assembly conversion data contained within
+> in the format <db1>To<Db2>.over.chain.gz. For example, a file named
+> hg15ToHg16.over.chain.gz file contains the liftOver data needed to
+> convert hg15 (Human Build 33) coordinates to hg16 (Human Build 34).
 
 > a net is single-coverage for target but not for query,
 > unless it has been filtered to be single-coverage on both target and query.
