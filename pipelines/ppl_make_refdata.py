@@ -9,6 +9,7 @@ from ruffus import *
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
+from pipelines.auxmod.chainfiles import build_chain_filter_commands
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
 
@@ -373,7 +374,7 @@ def build_pipeline(args, config, sci_obj):
                                  name='tm_idxhsa31',
                                  input=output_from(tm_fasta),
                                  filter=formatter('(?P<TRANSCRIPTOME>hsa_hg19_\w+)\.transcripts\.fa\.gz'),
-                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k31.idx/hash.bin',
+                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k31.idx/rsd.bin',
                                  extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
 
     cmd = config.get('Pipeline', 'mmuidx13').replace('\n', ' ')
@@ -381,7 +382,7 @@ def build_pipeline(args, config, sci_obj):
                                  name='tm_idxmmu13',
                                  input=output_from(tm_fasta),
                                  filter=formatter('(?P<TRANSCRIPTOME>mmu_mm9_\w+)\.transcripts\.fa\.gz'),
-                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k13.idx/hash.bin',
+                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k13.idx/rsd.bin',
                                  extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
 
     cmd = config.get('Pipeline', 'genidx19').replace('\n', ' ')
@@ -389,7 +390,7 @@ def build_pipeline(args, config, sci_obj):
                                  name='tm_idxgen19',
                                  input=output_from(tm_fasta),
                                  filter=formatter('(?P<TRANSCRIPTOME>(cfa|bta|mmu|ssc)_\w+)\.transcripts\.fa\.gz'),
-                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k19.idx/hash.bin',
+                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k19.idx/rsd.bin',
                                  extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
 
     run_task_transmodel = pipe.merge(task_func=touch_checkfile,
@@ -517,10 +518,100 @@ def build_pipeline(args, config, sci_obj):
     # End: major task enhancer
     # ================================
 
+    # ================================
+    # Major task: chain files
+    #
+    dir_task_chainfiles = os.path.join(workdir, 'chainfiles')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    chf_rawdata = os.path.join(dir_task_chainfiles, 'rawdata')
+    raw_chainfiles = collect_full_paths(chf_rawdata, '*.chain.gz')
+    chf_init = pipe.originate(task_func=lambda x: x,
+                              name='chf_init',
+                              output=raw_chainfiles)
+
+    filtered_chains = os.path.join(dir_task_chainfiles, 'filtered')
+    cmd = config.get('Pipeline', 'chfilt').replace('\n', ' ')
+    chf_filter = pipe.files(sci_obj.get_jobf('in_out'),
+                            build_chain_filter_commands(raw_chainfiles, dir_out_chromauto,
+                                                        filtered_chains, cmd, jobcall),
+                            name='chf_filter').mkdir(filtered_chains)
+
+    chain_re = '(?P<TARGET>\w+)_to_(?P<QUERY>\w+)(?P<EXT>\.[\w\.]+)'
+
+    cmd = config.get('Pipeline', 'chfswap')
+    chf_swap_dir = os.path.join(dir_task_chainfiles, 'tmp_swap')
+    chf_swap = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                              name='chf_swap',
+                              input=output_from(chf_filter),
+                              filter=formatter(chain_re),
+                              output=os.path.join(chf_swap_dir, '{QUERY[0]}_to_{TARGET[0]}.tbest.chain.gz'),
+                              extras=[cmd, jobcall]).mkdir(chf_swap_dir)
+
+    cmd = config.get('Pipeline', 'qrybnet')
+    chf_rbest_net = os.path.join(dir_task_chainfiles, 'rbest_net')
+    qrybnet = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                             name='qrybnet',
+                             input=output_from(chf_swap),
+                             filter=formatter(chain_re),
+                             output=os.path.join(chf_rbest_net, '{TARGET[0]}_to_{QUERY[0]}.rbest.net.gz'),
+                             extras=[cmd, jobcall]).mkdir(chf_rbest_net)
+
+    cmd = config.get('Pipeline', 'qrybchain')
+    chf_rbest_chain = os.path.join(dir_task_chainfiles, 'rbest_chain')
+    qrybchain = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                               name='qrybchain',
+                               input=output_from(qrybnet),
+                               filter=formatter(chain_re),
+                               output=os.path.join(chf_rbest_chain, '{TARGET[0]}_to_{QUERY[0]}.rbest.chain.gz'),
+                               extras=[cmd, jobcall]).mkdir(chf_rbest_chain)
+
+    cmd = config.get('Pipeline', 'trgbchain')
+    trgbchain = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                               name='trgbchain',
+                               input=output_from(qrybchain),
+                               filter=formatter(chain_re),
+                               output=os.path.join(chf_rbest_chain, '{QUERY[0]}_to_{TARGET[0]}.rbest.chain.gz'),
+                               extras=[cmd, jobcall]).mkdir(chf_rbest_chain)
+
+    cmd = config.get('Pipeline', 'trgbnet')
+    trgbnet = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                             name='trgbnet',
+                             input=output_from(trgbchain),
+                             filter=formatter(chain_re),
+                             output=os.path.join(chf_rbest_net, '{TARGET[0]}_to_{QUERY[0]}.rbest.net.gz'),
+                             extras=[cmd, jobcall]).mkdir(chf_rbest_net)
+
+    cmd = config.get('Pipeline', 'bednet')
+    chf_rbest_bed = os.path.join(dir_task_chainfiles, 'rbest_bed')
+    chf_bednet = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='chf_bednet',
+                                input=output_from(trgbnet, qrybnet),
+                                filter=suffix('.rbest.net.gz'),
+                                output='.rbest.bed.gz',
+                                output_dir=chf_rbest_bed,
+                                extras=[cmd, jobcall]).mkdir(chf_rbest_bed)
+
+    run_task_chains = pipe.merge(task_func=touch_checkfile,
+                                 name='task_chains',
+                                 input=output_from(chf_init, chf_filter, chf_swap,
+                                                   qrybnet, qrybchain, trgbchain, trgbnet,
+                                                   chf_bednet),
+                                 output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
+
+    #
+    # End of major task: chain files
+    # ================================
+
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
                          input=output_from(run_task_csz, run_task_enh, run_task_cgi,
-                                           run_task_genemodel, run_task_transmodel),
+                                           run_task_genemodel, run_task_transmodel,
+                                           run_task_chains),
                          output=os.path.join(workdir, 'run_all_refdata.chk'))
 
     # =========================================================================
