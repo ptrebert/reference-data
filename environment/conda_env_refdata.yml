@@ -10,3 +10,13 @@ dependencies:
   - p7zip
   - ucsc-fatotwobit
   - salmon=0.7.2
+  - ucsc-chainfilter
+  - ucsc-chainnet
+  - ucsc-chainprenet
+  - ucsc-chainsort
+  - ucsc-chainsplit
+  - ucsc-chainstitchid
+  - ucsc-chainswap
+  - ucsc-netsyntenic
+  - ucsc-nettobed
+  - ucsc-netchainsubset
