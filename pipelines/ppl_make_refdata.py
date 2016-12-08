@@ -9,7 +9,7 @@ from ruffus import *
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
-from pipelines.auxmod.chainfiles import build_chain_filter_commands
+from pipelines.auxmod.chainfiles import build_chain_filter_commands, build_symm_filter_commands
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
 
@@ -596,16 +596,57 @@ def build_pipeline(args, config, sci_obj):
                                 output_dir=chf_rbest_bed,
                                 extras=[cmd, jobcall]).mkdir(chf_rbest_bed)
 
+    cmd = config.get('Pipeline', 'qrysymm')
+    symmfilt_chains = os.path.join(dir_task_chainfiles, 'rbest_symm')
+    qrysymm = pipe.files(sci_obj.get_jobf('in_out'),
+                         build_symm_filter_commands(collect_full_paths(chf_rbest_chain, '*.chain.gz'),
+                                                    dir_out_chromauto, symmfilt_chains, cmd, jobcall),
+                         name='qrysymm').mkdir(symmfilt_chains)
+
     run_task_chains = pipe.merge(task_func=touch_checkfile,
                                  name='task_chains',
                                  input=output_from(chf_init, chf_filter, chf_swap,
                                                    qrybnet, qrybchain, trgbchain, trgbnet,
-                                                   chf_bednet),
+                                                   chf_bednet, qrysymm),
                                  output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
 
     #
     # End of major task: chain files
     # ================================
+
+    # ================================
+    # Major task: conservation tracks
+    #
+    dir_task_conservation = os.path.join(workdir, 'conservation')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+    cons_rawdata = os.path.join(dir_task_conservation, 'rawdata')
+    raw_consfiles = collect_full_paths(cons_rawdata, '*Elem*.gz')
+    cons_init = pipe.originate(task_func=lambda x: x,
+                               name='cons_init',
+                               output=raw_consfiles)
+
+    cmd = config.get('Pipeline', 'elembed').replace('\n', ' ')
+    dir_elemtobed = os.path.join(dir_task_conservation, 'phastcons', 'elements')
+    cons_elemtobed = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='elemtobed',
+                                    input=output_from(cons_init),
+                                    filter=suffix('.tsv.gz'),
+                                    output='.bed.gz',
+                                    output_dir=dir_elemtobed,
+                                    extras=[cmd, jobcall]).mkdir(dir_elemtobed)
+
+    run_task_conservation = pipe.merge(task_func=touch_checkfile,
+                                       name='task_cons',
+                                       input=output_from(cons_init, cons_elemtobed),
+                                       output=os.path.join(dir_task_conservation, 'run_task_conservation.chk'))
+
+    #
+    # End of major task: conservation tracks
+    # ======================================
 
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',

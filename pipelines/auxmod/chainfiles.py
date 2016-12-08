@@ -49,3 +49,27 @@ def build_chain_filter_commands(chainfiles, chromref, outpath, cmd, jobcall):
     assert params, 'No system calls created to filter chain files: {}'.format(chainfiles)
     return params
 
+
+def build_symm_filter_commands(chainfiles, chromref, outpath, cmd, jobcall):
+    """
+    :return:
+    """
+    chromfiles = collect_full_paths(chromref, '*.tsv')
+    assert chromfiles, 'No chromosome files found at location: {}'.format(chromref)
+    assm_chrom = dict()
+    for chrf in chromfiles:
+        assm = os.path.basename(chrf).split('_')[0]
+        sizes = read_chromsizes(chrf)
+        assm_chrom[assm] = list(sizes.keys())
+    params = []
+    for chf in chainfiles:
+        fn = os.path.basename(chf)
+        target, query = fn.split('.', 1)[0].split('_to_')
+        chroms = assm_chrom[query]
+        for c in chroms:
+            outname = '{}_to_{}.{}.symmap.tsv.gz'.format(target, query, c)
+            outfull = os.path.join(outpath, outname)
+            tmp = cmd.format(**{'chrom': c})
+            params.append([chf, outfull, tmp, jobcall])
+    assert params, 'No parameters created for chain symmetry filtering'
+    return params
