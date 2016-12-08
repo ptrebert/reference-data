@@ -603,11 +603,19 @@ def build_pipeline(args, config, sci_obj):
                                                     dir_out_chromauto, symmfilt_chains, cmd, jobcall),
                          name='qrysymm').mkdir(symmfilt_chains)
 
+    cmd = config.get('Pipeline', 'mrgblocks')
+    mrgblocks = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
+                             name='mrgblocks',
+                             input=output_from(qrysymm),
+                             filter=formatter('(?P<MAPPING>\w+)\.(?P<CHROM>\w+)\.symmap\.tsv\.gz'),
+                             output=os.path.join(symmfilt_chains, '{MAPPING[0]}.wg.symmap.tsv.gz'),
+                             extras=[cmd, jobcall])
+
     run_task_chains = pipe.merge(task_func=touch_checkfile,
                                  name='task_chains',
                                  input=output_from(chf_init, chf_filter, chf_swap,
                                                    qrybnet, qrybchain, trgbchain, trgbnet,
-                                                   chf_bednet, qrysymm),
+                                                   chf_bednet, qrysymm, mrgblocks),
                                  output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
 
     #
