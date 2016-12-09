@@ -31,7 +31,7 @@ def parse_command_line():
     :return:
     """
     parser = argp.ArgumentParser(add_help=True)
-    parser.add_argument('--task', '-tk', type=str, choices=['symmfilt'], dest='task', required=True)
+    parser.add_argument('--task', '-tk', type=str, choices=['symmfilt', 'normmap'], dest='task', required=True)
 
     #parser.add_argument('--task', '-tk', type=str, choices=['chaintobed', 'qfilter', 'symmext',
     #                                                        'maptobedgraph', 'swap'], dest='task')
@@ -434,6 +434,42 @@ def chain_symmetry_filter(args):
     opn, mode = text_file_mode(args.outputfile, read=False)
     with opn(args.outputfile, mode) as outf:
         _ = outf.write(block_buffer.getvalue())
+    return 0
+
+
+def normalize_block_map(args):
+    """
+    This function assumes that the input map file
+    is already sorted by block id - these ids are
+    replaced by consecutive numbers to simplify the
+    creation of the index file
+    :param args:
+    :return:
+    """
+    wo, wm = text_file_mode(args.outputfile, read=False)
+    with wo(args.outputfile, wm, encoding='ascii') as outf:
+        out_buffer = io.StringIO()
+        read = 0
+        ro, rm = text_file_mode(args.mapfile, read=True)
+        with ro(args.mapfile, rm, encoding='ascii') as mapf:
+            for bn, line in enumerate(mapf, start=1):
+                if not line.strip() or line.startswith('#'):
+                    continue
+                line = line.strip()
+                read += len(line)
+                parts = line.split()
+                parts[4] = str(bn)
+                tl = int(parts[2]) - int(parts[1])
+                ql = int(parts[7]) - int(parts[6])
+                assert tl == ql, 'Non-symmetric line in map file: num {} - {}'.format(bn, line)
+                out_buffer.write('\t'.join(parts) + '\n')
+                if read > 524288:
+                    _ = outf.write(out_buffer.getvalue())
+                    out_buffer = io.StringIO()
+                    read = 0
+        _ = outf.write(out_buffer.getvalue())
+        out_buffer = io.StringIO()
+    assert len(out_buffer.getvalue()) == 0, 'Out buffer not empty: {}'.format(len(out_buffer.getvalue()))
     return 0
 
 
@@ -848,7 +884,8 @@ def get_file_extension(args, which, compressed):
 if __name__ == '__main__':
     try:
         args = parse_command_line()
-        cmd_select = {'symmfilt': chain_symmetry_filter}
+        cmd_select = {'symmfilt': chain_symmetry_filter,
+                      'normmap': normalize_block_map}
         run_cmd = cmd_select[args.task]
         _ = run_cmd(args)
     except Exception:

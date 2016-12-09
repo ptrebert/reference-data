@@ -611,11 +611,21 @@ def build_pipeline(args, config, sci_obj):
                              output=os.path.join(symmfilt_chains, '{MAPPING[0]}.wg.symmap.tsv.gz'),
                              extras=[cmd, jobcall])
 
+    cmd = config.get('Pipeline', 'normblocks')
+    normblocks_dir = os.path.join(dir_task_chainfiles, 'rbest_norm')
+    normblocks = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='normblocks',
+                                input=output_from(mrgblocks),
+                                filter=suffix('wg.symmap.tsv.gz'),
+                                output='norm.symmmap.tsv.gz',
+                                output_dir=normblocks_dir,
+                                extras=[cmd, jobcall]).mkdir(normblocks_dir)
+
     run_task_chains = pipe.merge(task_func=touch_checkfile,
                                  name='task_chains',
                                  input=output_from(chf_init, chf_filter, chf_swap,
                                                    qrybnet, qrybchain, trgbchain, trgbnet,
-                                                   chf_bednet, qrysymm, mrgblocks),
+                                                   chf_bednet, qrysymm, mrgblocks, normblocks),
                                  output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
 
     #
