@@ -42,7 +42,11 @@ def parse_command_line():
     parser.add_argument('--trans-out', '-to', type=str, dest='transout')
     parser.add_argument('--map-out', '-mo', type=str, dest='mapout')
     parser.add_argument('--input-type', '-ity', type=str, choices=['gencode', 'ensucsc', 'ensbta'], dest='inputtype')
-    parser.add_argument('--gencode-basic', action='store_true', default=False, dest='gencodebasic')
+    parser.add_argument('--gencode-basic', action='store_true', default=False, dest='gencodebasic',
+                        help='From GENCODE: "basic identifies a subset of representative transcripts for each gene;'
+                             ' prioritises full-length protein coding transcripts over partial or'
+                             ' non-protein coding transcripts within the same gene, and intends to highlight'
+                             ' those transcripts that will be useful to the majority of users."')
     parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9X][0-9AB]?$", dest='chrom')
     args = parser.parse_args()
     return args
@@ -56,6 +60,26 @@ def subset_selector(intype):
     selector = {'gencode': 'gene_type', 'ensucsc': 'feature_type',
                 'ensbta': 'source'}
     return selector[intype]
+
+
+def subset_value_selector(intype, subset):
+    """
+    The official GENCODE sequence files for the protein coding subset contain:
+    - protein_coding, nonsense_mediated_decay, non_stop_decay,
+    - IG_*_gene, TR_*_gene, polymorphic_pseudogene
+    Using a simplified version here to come closer to the other species that
+    do not have such a detailed annotation
+    :param intype:
+    :param subset:
+    :return:
+    """
+    selector = {'gencode': {'protein_coding': ['protein_coding', 'IG_C_gene', 'IG_D_gene',
+                                               'IG_J_gene', 'IG_LV_gene', 'IG_V_gene',
+                                               'TR_C_gene', 'TR_J_gene', 'TR_V_gene',
+                                               'TR_D_gene', 'polymorphic_pseudogene']},
+                'ensucsc': {'protein_coding': ['protein_coding']},
+                'ensbta': {'protein_coding': ['protein_coding']}}
+    return selector[intype][subset]
 
 
 def feature_selector(intype):
@@ -96,10 +120,10 @@ def select_protein_coding_subset(args):
     """
     opn, mode = det_open_mode(args.input, True)
     subset_entry = subset_selector(args.inputtype)
-    subset = args.subset
     feature_entry = feature_selector(args.inputtype)
     gene_columns = gene_column_selector(args.inputtype)
     trans_columns = trans_column_selector(args.inputtype)
+    subset = subset_value_selector(args.inputtype, args.subset)
     genes = []
     transcripts = []
     use_genes = set()
@@ -108,7 +132,10 @@ def select_protein_coding_subset(args):
     with opn(args.input, mode) as infile:
         rows = csv.DictReader(infile, delimiter='\t')
         for r in rows:
-            if subset in r[subset_entry]:
+            # this weird construct: in bos taurus annotation, the
+            # protein coding subset is specified as Intact_Ensembl_protein_coding
+            # not sure who came up with that, but I don't like him...
+            if r[subset_entry] in subset or any([s in r[subset_entry] for s in subset]):
                 feat = r[feature_entry]
                 if feat == 'gene':
                     if int(r['end']) - int(r['start']) < args.genesize:
