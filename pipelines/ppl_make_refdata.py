@@ -621,11 +621,26 @@ def build_pipeline(args, config, sci_obj):
                                 output_dir=normblocks_dir,
                                 extras=[cmd, jobcall]).mkdir(normblocks_dir)
 
+    sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'mapidx').replace('\n', ' ')
+    mapidx = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                            name='mapidx',
+                            input=output_from(normblocks),
+                            filter=formatter(chain_re),
+                            output=os.path.join(normblocks_dir, '{TARGET[0]}_to_{QUERY[0]}.mapidx.h5'),
+                            extras=[cmd, jobcall])
+
     run_task_chains = pipe.merge(task_func=touch_checkfile,
                                  name='task_chains',
                                  input=output_from(chf_init, chf_filter, chf_swap,
                                                    qrybnet, qrybchain, trgbchain, trgbnet,
-                                                   chf_bednet, qrysymm, mrgblocks, normblocks),
+                                                   chf_bednet, qrysymm, mrgblocks, normblocks,
+                                                   mapidx),
                                  output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
 
     #
