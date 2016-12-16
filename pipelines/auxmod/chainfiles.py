@@ -71,5 +71,6 @@ def build_symm_filter_commands(chainfiles, chromref, outpath, cmd, jobcall):
             outfull = os.path.join(outpath, outname)
             tmp = cmd.format(**{'chrom': c})
             params.append([chf, outfull, tmp, jobcall])
-    assert params, 'No parameters created for chain symmetry filtering'
+    if len(chainfiles) > 0:
+        assert params, 'No parameters created for chain symmetry filtering'
     return params
