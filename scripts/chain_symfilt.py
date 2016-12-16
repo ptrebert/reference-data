@@ -384,6 +384,7 @@ def chain_symmetry_filter(args):
                     pos_masked = msk.count_masked(qchrom[block.qstart:block.qend])
                     assert pos_masked == 0, 'Bridge edge adjustment failed by {}: {}'.format(pos_masked, block)
                     assert block.qstart < block.qend, 'Bridge edge adjustment created invalid region: {}'.format(block)
+                    qchrom[block.qstart:block.qend].mask = 1
                     write_block(block, block_buffer)
                 else:
                     # rather rare case unless no selection based
@@ -409,6 +410,7 @@ def chain_symmetry_filter(args):
                         pos_masked = msk.count_masked(qchrom[tmp_block.qstart:tmp_block.qend])
                         assert pos_masked == 0, 'Fragment edge adjustment failed by {}: {}'.format(pos_masked, tmp_block)
                         assert tmp_block.qstart < tmp_block.qend, 'Fragment edge adjustment created invalid region: {}'.format(tmp_block)
+                        qchrom[block.qstart:block.qend].mask = 1
                         write_block(tmp_block, block_buffer)
                     continue
     # all the int() because JSON cannot serialize numpy.int*
