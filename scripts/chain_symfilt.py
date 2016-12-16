@@ -408,9 +408,9 @@ def chain_symmetry_filter(args):
                         valid_block(tmp_block, 'Fragment')
                         coverage_fragments += frag_len
                         pos_masked = msk.count_masked(qchrom[tmp_block.qstart:tmp_block.qend])
-                        assert pos_masked == 0, 'Fragment edge adjustment failed by {}: {}'.format(pos_masked, tmp_block)
+                        assert pos_masked == 0, 'Fragment edge adjustment failed by {}: {} -- {} -- Block: {}'.format(pos_masked, tmp_block, unmask_slices, block)
                         assert tmp_block.qstart < tmp_block.qend, 'Fragment edge adjustment created invalid region: {}'.format(tmp_block)
-                        qchrom[block.qstart:block.qend].mask = 1
+                        qchrom[tmp_block.qstart:tmp_block.qend].mask = 1
                         write_block(tmp_block, block_buffer)
                     continue
     # all the int() because JSON cannot serialize numpy.int*
