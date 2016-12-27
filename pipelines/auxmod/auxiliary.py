@@ -65,7 +65,7 @@ def check_bounds(chrom, start, end, bounds, fname):
     good = False
     try:
         assert int(end) <= bounds[chrom],\
-            'Region {} out of bounds: {} - {} - {} in file {}'.format(chrom, start, end, fname)
+            'Region out of bounds: {} - {} - {} : {} in file {}'.format(chrom, start, end, bounds[chrom], fname)
         _ = int(start)
         good = True
     except ValueError:
