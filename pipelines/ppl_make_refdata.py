@@ -10,6 +10,7 @@ from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
 from pipelines.auxmod.chainfiles import build_chain_filter_commands, build_symm_filter_commands
+from pipelines.auxmod.bedroi import make_bed_roi
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
 
@@ -329,10 +330,57 @@ def build_pipeline(args, config, sci_obj):
                                output=os.path.join(pc_subset, '{ANNOTID[0]}.genes.bed.gz'),
                                extras=[cmd, jobcall]).mkdir(pc_subset)
 
+    # dump various regions of interest from the subset of protein coding genes
+    pc_roi_dump = os.path.join(pc_subset, 'roi_bed')
+    gm_pc_win5p = pipe.transform(task_func=make_bed_roi,
+                                 name='gm_pc_win5p',
+                                 input=output_from(gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens),
+                                 filter=formatter('(?P<ANNOTID>[a-z]{3}_(?P<ASSM>[a-zA-Z0-9]+)_\w+)\.genes\.bed\.gz'),
+                                 output=os.path.join(pc_roi_dump, '{ANNOTID[0]}.win5p.bed.gz'),
+                                 extras=[os.path.join(dir_out_chromaugo, '{ASSM[0]}_chrom_augo.tsv'),
+                                         'win5p']).mkdir(pc_roi_dump).jobs_limit(4)
+
+    gm_pc_win3p = pipe.transform(task_func=make_bed_roi,
+                                 name='gm_pc_win3p',
+                                 input=output_from(gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens),
+                                 filter=formatter('(?P<ANNOTID>[a-z]{3}_(?P<ASSM>[a-zA-Z0-9]+)_\w+)\.genes\.bed\.gz'),
+                                 output=os.path.join(pc_roi_dump, '{ANNOTID[0]}.win3p.bed.gz'),
+                                 extras=[os.path.join(dir_out_chromaugo, '{ASSM[0]}_chrom_augo.tsv'),
+                                         'win3p']).mkdir(pc_roi_dump).jobs_limit(4)
+
+    gm_pc_reg5p = pipe.transform(task_func=make_bed_roi,
+                                 name='gm_pc_reg5p',
+                                 input=output_from(gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens),
+                                 filter=formatter('(?P<ANNOTID>[a-z]{3}_(?P<ASSM>[a-zA-Z0-9]+)_\w+)\.genes\.bed\.gz'),
+                                 output=os.path.join(pc_roi_dump, '{ANNOTID[0]}.reg5p.bed.gz'),
+                                 extras=[os.path.join(dir_out_chromaugo, '{ASSM[0]}_chrom_augo.tsv'),
+                                         'reg5p']).mkdir(pc_roi_dump).jobs_limit(4)
+
+    gm_pc_body = pipe.transform(task_func=make_bed_roi,
+                                name='gm_pc_body',
+                                input=output_from(gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens),
+                                filter=formatter('(?P<ANNOTID>[a-z]{3}_(?P<ASSM>[a-zA-Z0-9]+)_\w+)\.genes\.bed\.gz'),
+                                output=os.path.join(pc_roi_dump, '{ANNOTID[0]}.body.bed.gz'),
+                                extras=[os.path.join(dir_out_chromaugo, '{ASSM[0]}_chrom_augo.tsv'),
+                                        'body']).mkdir(pc_roi_dump).jobs_limit(4)
+
+    cmd = config.get('Pipeline', 'subpchdf').replace('\n', ' ')
+    pc_roi_conv_hdf = os.path.join(pc_subset, 'roi_hdf')
+    gm_pc_hdf = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                               name='gm_pc_hdf',
+                               input=output_from(gm_pc_win5p, gm_pc_win3p, gm_pc_reg5p, gm_pc_body),
+                               filter=formatter('(?P<SPEC>\w+)_(?P<ASSM>\w+)_(?P<ANNOT>\w+)_'
+                                                '(?P<VER>\w+)\.(?P<REGTYPE>\w+)\.bed\.gz'),
+                               output=os.path.join(pc_roi_conv_hdf, '{SPEC[0]}_{ASSM[0]}_{ANNOT[0]}_'
+                                                                    '{VER[0]}.{REGTYPE[0]}.hdf'),
+                               extras=[cmd, jobcall]).mkdir(pc_roi_conv_hdf)
+
     run_task_genemodel = pipe.merge(task_func=touch_checkfile,
                                     name='task_genemodel',
                                     input=output_from(gm_gtftobed, gm_gfftobed, gm_enstobed,
-                                                      gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens),
+                                                      gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens,
+                                                      gm_pc_win5p, gm_pc_win3p, gm_pc_reg5p, gm_pc_body,
+                                                      gm_pc_hdf),
                                     output=os.path.join(dir_task_genemodel, 'run_task_genemodel.chk'))
 
     #

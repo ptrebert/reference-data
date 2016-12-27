@@ -22,3 +22,7 @@ dependencies:
   - ucsc-netchainsubset
   - pandas=0.19
   - pytables=3.2.3.1
+  - scipy=0.18.*
+  - scikit-learn=0.18
+  - pandas=0.19
+  - statsmodels=0.6.1
