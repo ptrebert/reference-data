@@ -372,7 +372,7 @@ def build_pipeline(args, config, sci_obj):
                                filter=formatter('(?P<SPEC>\w+)_(?P<ASSM>\w+)_(?P<ANNOT>\w+)_'
                                                 '(?P<VER>\w+)\.(?P<REGTYPE>\w+)\.bed\.gz'),
                                output=os.path.join(pc_roi_conv_hdf, '{SPEC[0]}_{ASSM[0]}_{ANNOT[0]}_'
-                                                                    '{VER[0]}.{REGTYPE[0]}.hdf'),
+                                                                    '{VER[0]}.{REGTYPE[0]}.h5'),
                                extras=[cmd, jobcall]).mkdir(pc_roi_conv_hdf)
 
     run_task_genemodel = pipe.merge(task_func=touch_checkfile,
