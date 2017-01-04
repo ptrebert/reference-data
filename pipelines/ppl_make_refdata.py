@@ -178,11 +178,21 @@ def build_pipeline(args, config, sci_obj):
                               output=os.path.join(dir_gen_fabgz, '{ASSM[0]}.fa.bgz'),
                               extras=[cmd, jobcall]).mkdir(dir_gen_fabgz)
 
+    dir_gen_fasta = os.path.join(dir_task_genomes, 'wg_fasta')
+    cmd = config.get('Pipeline', 'tofasta')
+    genfasta = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                              name='genfasta',
+                              input=output_from(genomes_2bit_init),
+                              filter=suffix('.2bit'),
+                              output='.fa',
+                              output_dir=dir_gen_fasta,
+                              extras=[cmd, jobcall]).mkdir(dir_gen_fasta)
+
     run_task_genomes = pipe.merge(task_func=touch_checkfile,
                                   name='task_genomes',
                                   input=output_from(genomes_raw_init, genstdfagz, gen2bit,
                                                     genomes_2bit_init, genfagz, genfabgz,
-                                                    gen2bitren),
+                                                    gen2bitren, genfasta),
                                   output=os.path.join(dir_task_genomes, 'run_task_genomes.chk'))
     #
     # End: major task genomes
