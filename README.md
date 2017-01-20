@@ -25,7 +25,6 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-05-24	ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz
 - 2016-06-06	ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M1/gencode.vM1.pc_transcripts.fa.gz
 - 2016-06-06	ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.pc_transcripts.fa.gz
-- 2016-06-27	ftp://ftp.ebi.ac.uk/pub/databases/genenames/hcop/human_mouse_hcop_six_column.txt.gz
 - 2016-07-07	http://128.206.12.216/drupal/sites/bovinegenome.org/files/data/btau_4.6.1/Ensembl75_liftOver_Btau_4.6.1_genes.gff3.gz
 - 2016-07-11	http://hgdownload.soe.ucsc.edu/goldenPath/canFam3/database/ensGene.txt.gz
 - 2016-07-11	http://hgdownload.soe.ucsc.edu/goldenPath/canFam3/database/ensemblSource.txt.gz
@@ -48,6 +47,7 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-12-02    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; phastCons conserved elements] mm9_phastConsElem_vert_30way.tsv.gz
 - 2016-12-13    http://www.bio-bigdata.com/SEA/download/SEA00201.bed [super enhancer mm9 - doi: 10.1093/nar/gkv1243 ]
 - 2017-01-04    ftp://ftp.ensembl.org/pub/grch37/release-87/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna_sm.primary_assembly.fa.gz
+- 2017-01-17    ftp://ftp.ebi.ac.uk/pub/databases/genenames/hcop/human_* [human orthologs for mouse, pig, cow etc]
 
 ## UCSC Chainfiles
 

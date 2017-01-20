@@ -11,6 +11,7 @@ from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vi
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
 from pipelines.auxmod.chainfiles import build_chain_filter_commands, build_symm_filter_commands
 from pipelines.auxmod.bedroi import make_bed_roi
+from pipelines.auxmod.orthologs import match_ortholog_files
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
 
@@ -500,6 +501,35 @@ def build_pipeline(args, config, sci_obj):
     #
     # End of major task: transcript model
     # ====================================
+
+    # ================================
+    # Major task: orthologs
+    #
+    dir_task_orthologs = os.path.join(workdir, 'orthologs')
+
+    ortho_rawdata = os.path.join(dir_task_orthologs, 'rawdata')
+    ortho_files = collect_full_paths(ortho_rawdata, '*.txt.gz')
+    ortho_init = pipe.originate(task_func=lambda x: x,
+                                name='ortho_init',
+                                output=ortho_files)
+
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    subset_files = collect_full_paths(pc_subset, '*.genes.*')
+    genemodel_dir = bedout  # NB: if ever: should be renamed to gm_bedout for clarity
+    cmd = config.get('Pipeline', 'orthconv').replace('\n', ' ')
+    outdir = os.path.join(dir_task_orthologs, 'hdf')
+    ortho_conv = pipe.files(sci_obj.get_jobf('in_out'),
+                            match_ortholog_files(ortho_files, genemodel_dir, subset_files, outdir, cmd, jobcall),
+                            name='ortho_conv').mkdir(outdir)
+
+    #
+    #
+    # ================================
 
     # ================================
     # Major task: enhancer
