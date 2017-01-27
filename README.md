@@ -48,6 +48,10 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-12-13    http://www.bio-bigdata.com/SEA/download/SEA00201.bed [super enhancer mm9 - doi: 10.1093/nar/gkv1243 ]
 - 2017-01-04    ftp://ftp.ensembl.org/pub/grch37/release-87/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna_sm.primary_assembly.fa.gz
 - 2017-01-17    ftp://ftp.ebi.ac.uk/pub/databases/genenames/hcop/human_* [human orthologs for mouse, pig, cow etc]
+- 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/hg19-human/wgEncodeHg19ConsensusSignalArtifactRegions.bed.gz
+- 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/mm10-mouse/mm10.blacklist.bed.gz
+- 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/mm9-mouse/mm9-blacklist.bed.gz
+- 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/hg38-human/hg38.blacklist.bed.gz
 
 ## UCSC Chainfiles
 

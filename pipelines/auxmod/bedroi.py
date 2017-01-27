@@ -1,6 +1,9 @@
 # coding=utf-8
 
 import os as os
+import io as io
+import re as re
+import gzip as gz
 import functools as fnt
 
 from pipelines.auxmod.auxiliary import read_chromsizes, check_bounds, open_comp
@@ -67,3 +70,58 @@ def make_bed_roi(inputfile, outputfile, chromfile, regtype):
     with opn(outputfile, mode) as outfile:
         _ = outfile.write(enc('\n'.join(regions)))
     return outputfile
+
+
+def normalize_join(inputfiles, outputfiles):
+    """
+    :param inputfiles:
+    :param outputfiles:
+    :return:
+    """
+    buffer_ncbi = []
+    buffer_ens = []
+    prefixed_chroms = re.compile('^[0-9XYM]')
+    for fp in inputfiles:
+        if fp.endswith('.gz'):
+            opn, mode = gz.open, 'rt'
+            to_strip = '.bed.gz'
+        else:
+            opn, mode = open, 'r'
+            to_strip = '.bed'
+        with opn(fp, mode) as infile:
+            for idx, line in enumerate(infile, start=1):
+                if not line.strip() or line.startswith('#'):
+                    continue
+                cols = line.strip().split()
+                region = cols[:3]
+                try:
+                    name = cols[3]
+                except IndexError:
+                    name = os.path.basename(fp).rstrip(to_strip) + '_' + str(idx)
+                try:
+                    _ = int(name)
+                    name = os.path.basename(fp).rstrip(to_strip) + '_' + str(idx)
+                except ValueError:
+                    pass
+                region.append(name)
+                if region[0].startswith('chr'):
+                    buffer_ncbi.append(region)
+                    region = [region[0][3:], region[1], region[2], region[3]]
+                    buffer_ens.append(region)
+                else:
+                    if prefixed_chroms.match(region[0]):
+                        buffer_ens.append(region)
+                        region = ['chr' + region[0], region[1], region[2], region[3]]
+                        buffer_ncbi.append(region)
+                    else:
+                        buffer_ncbi.append(region)
+                        buffer_ens.append(region)
+    buffer_ens = sorted(buffer_ens, key=lambda x: (x[0], int(x[1]), int(x[2])))
+    buffer_ncbi = sorted(buffer_ncbi, key=lambda x: (x[0], int(x[1]), int(x[2])))
+    ncbi_output = outputfiles[0]
+    with open(ncbi_output, 'w') as outf:
+        _ = outf.write('\n'.join(['\t'.join(reg) for reg in buffer_ncbi]) + '\n')
+    ensembl_output = outputfiles[1]
+    with open(ensembl_output, 'w') as outf:
+        _ = outf.write('\n'.join(['\t'.join(reg) for reg in buffer_ens]) + '\n')
+    return ncbi_output, ensembl_output

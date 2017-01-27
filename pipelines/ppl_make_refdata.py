@@ -10,7 +10,7 @@ from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
 from pipelines.auxmod.chainfiles import build_chain_filter_commands, build_symm_filter_commands
-from pipelines.auxmod.bedroi import make_bed_roi
+from pipelines.auxmod.bedroi import make_bed_roi, normalize_join
 from pipelines.auxmod.orthologs import match_ortholog_files
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
@@ -773,6 +773,74 @@ def build_pipeline(args, config, sci_obj):
                                                    chf_bednet, qrysymm, mrgblocks, normblocks,
                                                    mapidx),
                                  output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
+
+    #
+    # End of major task: chain files
+    # ================================
+
+    # ================================
+    # Major task: blacklist regions for NGS data
+    #
+    dir_task_blacklists = os.path.join(workdir, 'blacklists')
+    blacklists_rawdata = os.path.join(dir_task_blacklists, 'rawdata')
+
+    dir_blnormjoin = os.path.join(dir_task_blacklists, 'normjoin')
+    blnj_grch37 = pipe.collate(task_func=normalize_join,
+                               name='blnjgrch37',
+                               input=[os.path.join(blacklists_rawdata, fn) for fn in ['hs37d5_extENCODE_blacklist_DEEP.bed',
+                                                                                      'wgEncodeHg19ConsensusSignalArtifactRegions.bed.gz']],
+                               filter=formatter(),
+                               output=[os.path.join(dir_blnormjoin, 'hg19_ngs_blacklist.bed'),
+                                       os.path.join(dir_blnormjoin, 'GRCh37_ngs_blacklist.bed')]).mkdir(dir_blnormjoin)
+
+    blnj_grch38 = pipe.collate(task_func=normalize_join,
+                               name='blnjgrch38',
+                               input=[os.path.join(blacklists_rawdata, fn) for fn in ['hg38.blacklist.bed.gz']],
+                               filter=formatter(),
+                               output=[os.path.join(dir_blnormjoin, 'hg38_ngs_blacklist.bed'),
+                                       os.path.join(dir_blnormjoin, 'GRCh38_ngs_blacklist.bed')]).mkdir(dir_blnormjoin)
+
+    blnj_grcm38 = pipe.collate(task_func=normalize_join,
+                               name='blnjgrcm38',
+                               input=[os.path.join(blacklists_rawdata, fn) for fn in ['GRCm38_ENCODE-DKFZ_blacklist_DEEP.bed',
+                                                                                      'GRCm38_alt-SHeyne_blacklist_DEEP.bed',
+                                                                                      'mm10.blacklist.bed.gz']],
+                               filter=formatter(),
+                               output=[os.path.join(dir_blnormjoin, 'mm10_ngs_blacklist.bed'),
+                                       os.path.join(dir_blnormjoin, 'GRCm38_ngs_blacklist.bed')]).mkdir(dir_blnormjoin)
+
+    blnj_mgsc37 = pipe.collate(task_func=normalize_join,
+                               name='blnjmgsc37',
+                               input=[os.path.join(blacklists_rawdata, fn) for fn in ['mm9-blacklist.bed.gz']],
+                               filter=formatter(),
+                               output=[os.path.join(dir_blnormjoin, 'mm9_ngs_blacklist.bed'),
+                                       os.path.join(dir_blnormjoin, 'MGSCv37_ngs_blacklist.bed')]).mkdir(dir_blnormjoin)
+
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    blacklists_init = pipe.originate(task_func=lambda x: x,
+                                     name='blacklists_init',
+                                     output=collect_full_paths(dir_blnormjoin, '*.bed'))
+
+    dir_blmerge = os.path.join(dir_task_blacklists, 'merged')
+    cmd = config.get('Pipeline', 'blmerge')
+    blmerge = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                             name='blmerge',
+                             input=output_from(blacklists_init),
+                             filter=suffix('.bed'),
+                             output='.mrg.bed',
+                             output_dir=dir_blmerge,
+                             extras=[cmd, jobcall]).mkdir(dir_blmerge)
+
+    run_task_blacklists = pipe.merge(task_func=touch_checkfile,
+                                     name='task_blacklists',
+                                     input=output_from(blacklists_init, blnj_grch37, blnj_mgsc37,
+                                                       blnj_grcm38, blnj_grch38, blmerge),
+                                     output=os.path.join(dir_task_blacklists, 'run_task_blacklists.chk'))
 
     #
     # End of major task: chain files
