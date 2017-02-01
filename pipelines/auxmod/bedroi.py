@@ -18,16 +18,18 @@ def adjust_coordinates(regtype, start, end, strand):
     :return:
     """
     norm = 1 if strand in ['+', '.'] else -1
-    if regtype in ['win5p', 'win3p']:
-        refloc = start if regtype == 'win5p' else end
-        s, e = refloc - 250, refloc + 250
+    if regtype == 'win5p':
+        if norm > 0:
+            s, e = start - 500, start + 500
+        else:
+            s, e = end - 500, end + 500
     elif regtype == 'body':
         s, e = start, end
     elif regtype == 'reg5p':
         if norm > 0:
-            s, e = start - 2250, start - 250
+            s, e = start - 3500, start - 500
         else:
-            s, e = end + 250, end + 2250
+            s, e = end + 500, end + 3500
     else:
         raise ValueError('Unknown region type: {}'.format(regtype))
     return s, e
