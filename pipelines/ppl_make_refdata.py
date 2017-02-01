@@ -880,6 +880,36 @@ def build_pipeline(args, config, sci_obj):
     # End of major task: conservation tracks
     # ======================================
 
+    # ======================================
+    # Major task: TSS modeling
+    #
+    dir_task_tssmodel = os.path.join(workdir, 'tss')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    tss_cage_rawfiles = collect_full_paths(os.path.join(dir_task_tssmodel, 'rawdata'), '*.bed')
+    tss_init = pipe.originate(task_func=lambda x: x,
+                              name='tss_init',
+                              output=tss_cage_rawfiles)
+
+    dir_tss_isect = os.path.join(dir_task_tssmodel, 'isectfeat')
+    cmd = config.get('Pipeline', 'tssisect')
+    tss_isect = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                               name='tss_isect',
+                               input=output_from(tss_init),
+                               filter=suffix('.bed'),
+                               output='_closes_feat.tsv',
+                               output_dir=dir_tss_isect,
+                               extras=[cmd, jobcall]).mkdir(dir_tss_isect)
+
+    #
+    # End of major task: TSS
+    # =======================================
+
+
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
                          input=output_from(run_task_csz, run_task_enh, run_task_cgi,
