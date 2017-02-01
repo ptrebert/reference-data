@@ -7,8 +7,11 @@ import sys as sys
 import traceback as trb
 import argparse as argp
 import operator as op
+import collections as col
+import difflib as diffl
 import io as io
 import re as re
+import json as js
 
 
 def det_open_mode(fp, read=True):
@@ -47,7 +50,7 @@ def parse_command_line():
                              ' prioritises full-length protein coding transcripts over partial or'
                              ' non-protein coding transcripts within the same gene, and intends to highlight'
                              ' those transcripts that will be useful to the majority of users."')
-    parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9X][0-9AB]?$", dest='chrom')
+    parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9XY][0-9AB]?$", dest='chrom')
     args = parser.parse_args()
     return args
 
@@ -107,9 +110,12 @@ def trans_column_selector(intype):
     :param intype:
     :return:
     """
-    selector = {'gencode': op.itemgetter(*('#chrom', 'start', 'end', 'transcript_id', 'score', 'strand', 'transcript_name', 'gene_id')),
-                'ensucsc': op.itemgetter(*('#chrom', 'start', 'end', 'name', 'score', 'strand', 'gene_name', 'name2')),
-                'ensbta': op.itemgetter(*('#seqid', 'start', 'end', 'ID', 'score', 'strand', 'Transcript_name', 'Parent'))}
+    selector = {'gencode': op.itemgetter(*('#chrom', 'start', 'end', 'transcript_id',
+                                           'score', 'strand', 'transcript_name', 'gene_id')),
+                'ensucsc': op.itemgetter(*('#chrom', 'start', 'end', 'name', 'score',
+                                           'strand', 'gene_name', 'name2')),
+                'ensbta': op.itemgetter(*('#seqid', 'start', 'end', 'ID', 'score',
+                                          'strand', 'Transcript_name', 'Parent'))}
     return selector[intype]
 
 
@@ -129,6 +135,10 @@ def select_protein_coding_subset(args):
     use_genes = set()
     basic_set = args.inputtype == 'gencode' and args.gencodebasic
     chrom_filter = re.compile(args.chrom.strip('"'))
+    filter_stats = {'biotype': col.Counter(), 'feattype': col.Counter(),
+                    'featsize': col.Counter(), 'featsize_names': [],
+                    'featloc': col.Counter(), 'featloc_names': [],
+                    'nonbasic': col.Counter(), 'nonbasic_names': []}
     with opn(args.input, mode) as infile:
         rows = csv.DictReader(infile, delimiter='\t')
         for r in rows:
@@ -138,26 +148,47 @@ def select_protein_coding_subset(args):
             if r[subset_entry] in subset or any([s in r[subset_entry] for s in subset]):
                 feat = r[feature_entry]
                 if feat == 'gene':
-                    if int(r['end']) - int(r['start']) < args.genesize:
-                        continue
                     this_gene = list(gene_columns(r))
+                    this_gene[3] = this_gene[3].split('.')[0]
+                    gene_length = int(this_gene[2]) - int(this_gene[1])
+                    if gene_length < args.genesize:
+                        filter_stats['featsize']['gene'] += 1
+                        filter_stats['featsize_names'].append([this_gene[3], gene_length])
+                        continue
                     if chrom_filter.match(this_gene[0]) is None:
+                        filter_stats['featloc']['gene'] += 1
+                        filter_stats['featloc_names'].append([this_gene[3], this_gene[0]])
                         continue
                     use_genes.add(this_gene[3])
                     genes.append(this_gene)
                 elif feat == 'transcript':
+                    this_trans = list(trans_columns(r))
+                    this_trans[3] = this_trans[3].split('.')[0]
+                    this_trans[-1] = this_trans[-1].split('.')[0]
                     if basic_set:
                         if r['tag'] != 'basic':
+                            filter_stats['nonbasic']['transcript'] += 1
+                            filter_stats['nonbasic_names'].append([this_trans[3], r['tag']])
                             continue
-                    this_trans = list(trans_columns(r))
                     if chrom_filter.match(this_trans[0]) is None:
+                        filter_stats['featloc']['transcript'] += 1
+                        filter_stats['featloc_names'].append([this_trans[3], this_trans[0]])
                         continue
                     transcripts.append(this_trans)
                 else:
+                    filter_stats['feattype'][feat] += 1
                     continue
+            else:
+                filter_stats['biotype'][r[subset_entry]] += 1
+    assert len(genes) == len(use_genes), 'Lost gene information: {} vs {}'.format(len(genes), len(use_genes))
+    filter_stats['raw_transcripts'] = len(transcripts)
     transcripts = [t for t in transcripts if t[-1] in use_genes]
+    filter_stats['use_transcripts'] = len(transcripts)
+    filter_stats['raw_genes'] = len(genes)
     genes_with_transcripts = set([t[-1] for t in transcripts])
     genes = [g for g in genes if g[3] in genes_with_transcripts]
+    filter_stats['use_genes'] = len(genes)
+    filter_stats['chromosomes'] = sorted(list(set([g[0] for g in genes])))
     assert genes, 'No genes selected for protein coding subset'
     assert transcripts, 'No transcripts selected for protein coding subset'
     mapping = io.StringIO()
@@ -178,6 +209,18 @@ def select_protein_coding_subset(args):
         writer = csv.writer(outf, delimiter='\t')
         writer.writerow(trans_header)
         writer.writerows(transcripts)
+    seqm = diffl.SequenceMatcher(a=args.geneout, b=args.transout)
+    stats_out = seqm.find_longest_match(0, len(args.geneout), 0, len(args.transout))
+    stats_out = args.geneout[stats_out.a:stats_out.a + stats_out.size]
+    stats_out += 'filter-stats.json'
+    reorder = col.defaultdict(dict)
+    for k, v in filter_stats.items():
+        if k.endswith('_names'):
+            reorder['items'][k] = v
+        else:
+            reorder['counters'][k] = v
+    with open(stats_out, 'w') as dump:
+        js.dump(reorder, dump, indent=1, sort_keys=True)
     return
 
 
