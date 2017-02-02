@@ -524,6 +524,24 @@ def build_pipeline(args, config, sci_obj):
     # ================================
 
     # ================================
+    # Major task promoter
+    #
+    dir_task_promoter = os.path.join(workdir, 'promoter')
+    encode_expcell_map = os.path.join(workdir, 'encode_exp-to-cell.json')
+
+    prom_rawdata = os.path.join(dir_task_promoter, 'rawdata')
+    prom_init_hg19 = pipe.originate(task_func=lambda x: x,
+                                    name='prom_init_hg19',
+                                    output=collect_full_paths(os.path.join(prom_rawdata, '20161130-062049-promoter-like-hg19-BothDNaseAndH3K4me3.v3'),
+                                                              '*.bed.gz'))
+
+
+
+    #
+    # End of major task: promoter
+    # ================================
+
+    # ================================
     # Major task: enhancer
     #
     dir_task_enhancer = os.path.join(workdir, 'enhancer')
