@@ -4,6 +4,27 @@ Collection of scripts and converters assembled as pipeline to process annotation
 # Portal links
 - ENCODE annotations:   https://www.encodeproject.org/data/annotations
 
+## Glossary
+
+### ENCODE promoters (v3)
+
+- based on H3K4me3 / DNaseI
+- human: 107 cell types
+- mouse: 14 cell types
+- proximal: (DNase peak less than 2kb away from annotated TSS) *AND* (peak in top 10000 peaks,
+ ranking based on all nearby expressed transcripts)
+- distal: higher ranked according to the above schema, but not TSS-proximal; could be unannotated TSS or transcribed enhancers
+
+### ENCODE enhancers (v3)
+
+- based on H3K27ac / DNaseI
+- human: 47 cell types
+- mouse: 14 cell types
+- distal: (region more than 2kb away from any TSS) *AND* (region in top 20000 based on (i) anchoring with DNase peak and (ii) ranking
+ by H3K27ac signal); notably, a region in this set can contain several DNase peaks since the boundaries are defined based on H3K27ac peaks
+- proximal: higher ranked according to the above schema, but too close to a TSS; could be promoter or enhancer with promoter-like activty
+
+
 # Download log
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.2bit
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/bigZips/mm9.2bit

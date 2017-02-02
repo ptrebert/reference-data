@@ -12,6 +12,7 @@ from pipelines.auxmod.cpgislands import process_ucsc_cgi
 from pipelines.auxmod.chainfiles import build_chain_filter_commands, build_symm_filter_commands
 from pipelines.auxmod.bedroi import make_bed_roi, normalize_join
 from pipelines.auxmod.orthologs import match_ortholog_files
+from pipelines.auxmod.promoter import merge_promoter_files
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
 
@@ -535,7 +536,14 @@ def build_pipeline(args, config, sci_obj):
                                     output=collect_full_paths(os.path.join(prom_rawdata, '20161130-062049-promoter-like-hg19-BothDNaseAndH3K4me3.v3'),
                                                               '*.bed.gz'))
 
-
+    dir_prom_mrg = os.path.join(dir_task_promoter, 'temp')
+    prom_mrg_hg19 = pipe.collate(task_func=merge_promoter_files,
+                                 name='prom_mrg_hg19',
+                                 input=output_from(prom_init_hg19),
+                                 filter=formatter(),
+                                 output=[os.path.join(dir_prom_mrg, 'ENCODE_hg19_proximal.bed'),
+                                         os.path.join(dir_prom_mrg, 'ENCODE_hg19_distal.bed')],
+                                 extras=[encode_expcell_map]).mkdir(dir_prom_mrg)
 
     #
     # End of major task: promoter
