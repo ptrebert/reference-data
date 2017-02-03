@@ -4,20 +4,22 @@ import os as os
 import operator as op
 import gzip as gz
 import csv as csv
+import json as js
 
 
-def merge_promoter_files(inputfiles, outputfiles, expmap):
+def split_promoter_files(inputfiles, outputfile, expmapfile, regselect):
     """
     :param inputfiles:
-    :param outputfiles:
-    :param expmap:
+    :param outputfile:
+    :param expmapfile:
+    :param regselect:
     :return:
     """
     # names like: Proximal-Prediction-1
     header = ['chrom', 'start', 'end', 'name', 'score', 'strand', 'core_start', 'core_end', 'rgb']
     get_items = op.itemgetter(*('chrom', 'start', 'end', 'core_start', 'core_end'))
-    prox_buffer = []
-    dist_buffer = []
+    out_buffer = []
+    expmap = js.load(open(expmapfile, 'r'))
     for fp in inputfiles:
         dnase, hist = os.path.basename(fp).split('_')[:2]
         cell1 = expmap[dnase]
@@ -28,18 +30,38 @@ def merge_promoter_files(inputfiles, outputfiles, expmap):
             for row in reader:
                 vals = list(get_items(row))
                 out = vals[:3] + [cell1, '100', '.'] + vals[3:]
-                if row['name'].startswith('Proximal'):
-                    prox_buffer.append(tuple(out))
-                else:
-                    dist_buffer.append(tuple(out))
-    header = ['chrom', 'start', 'end', 'name', 'score', 'strand', 'core_start', 'core_end']
-    prox_buffer = sorted(prox_buffer, key=lambda x: (x[0], int(x[1]), int(x[2]), int(x[6])))
-    dist_buffer = sorted(dist_buffer, key=lambda x: (x[0], int(x[1]), int(x[2]), int(x[6])))
-    with open(outputfiles[0], 'w') as out:
-        _ = out.write('#' + '\t'.join(header) + '\n')
-        _ = out.write('\n'.join(['\t'.join(p) for p in prox_buffer]) + '\n')
+                if row['name'].startswith(regselect):
+                    out_buffer.append(tuple(out))
 
-    with open(outputfiles[1], 'w') as out:
+    header = ['chrom', 'start', 'end', 'name', 'score', 'strand', 'core_start', 'core_end']
+    out_buffer = sorted(out_buffer, key=lambda x: (x[0], int(x[1]), int(x[2]), int(x[6])))
+    with open(outputfile, 'w') as out:
         _ = out.write('#' + '\t'.join(header) + '\n')
-        _ = out.write('\n'.join(['\t'.join(d) for d in dist_buffer]) + '\n')
-    return outputfiles
+        _ = out.write('\n'.join(['\t'.join(d) for d in out_buffer]) + '\n')
+    return outputfile
+
+
+def score_promoter_regions(inputfile, outputfile):
+    """
+    :param inputfile:
+    :param outputfile:
+    :return:
+    """
+    out_buffer = []
+    with open(inputfile, 'r') as infile:
+        reader = csv.DictReader(infile, delimiter='\t',
+                                fieldnames=['#chrom', 'start', 'end', 'name', 'core_start', 'core_end'])
+        for row in reader:
+            score = str(min(1000, len(row['name'].split('@')) * 25))
+            row['itemRgb'] = '162,44,41'
+            row['score'] = score
+            row['name'] = row['name'].replace('--', '-').replace('@', ',')
+            row['strand'] = '.'
+            out_buffer.append(row)
+    out_buffer = sorted(out_buffer, key=lambda d: (d['#chrom'], int(d['start']), int(d['end'])))
+    out_header = ['#chrom', 'start', 'end', 'name', 'score', 'strand', 'core_start', 'core_end', 'itemRgb']
+    with open(outputfile, 'w') as outfile:
+        writer = csv.DictWriter(outfile, fieldnames=out_header, delimiter='\t')
+        writer.writeheader()
+        writer.writerows(out_buffer)
+    return outputfile
