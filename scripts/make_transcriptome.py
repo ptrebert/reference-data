@@ -111,6 +111,8 @@ def build_transcriptome(transcripts, seqfile, outfile):
         outbuffer.write('>{}\n'.format(t[3]))
         for idx in range(0, len(trans_seq), 80):
             outbuffer.write(trans_seq[idx:idx+80] + '\n')
+    with opn(outfile, mode) as outf:
+        _ = outf.write(outbuffer.getvalue())
     return 0
 
 
