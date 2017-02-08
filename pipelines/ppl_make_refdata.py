@@ -463,22 +463,18 @@ def build_pipeline(args, config, sci_obj):
         jobcall = sci_obj.ruffus_localjob()
 
     dir_tm_mapindex = os.path.join(dir_task_transmodel, 'mapindex')
-    cmd = config.get('Pipeline', 'hsaidx31').replace('\n', ' ')
-    tm_idxhsa31 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-                                 name='tm_idxhsa31',
+
+    # k=31 - read length ~75 and above; Salmon does not support higher values for k
+    # k=31 is the developer's recommendation for read length of 75
+    cmd = config.get('Pipeline', 'genidx31').replace('\n', ' ')
+    tm_idxgen31 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='tm_idxgen31',
                                  input=output_from(tm_fasta),
-                                 filter=formatter('(?P<TRANSCRIPTOME>hsa_hg19_\w+)\.transcripts\.fa\.gz'),
+                                 filter=formatter('(?P<TRANSCRIPTOME>(hsa|mmu)_\w+)\.transcripts\.fa\.gz'),
                                  output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k31.idx/rsd.bin',
                                  extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
 
-    cmd = config.get('Pipeline', 'mmuidx13').replace('\n', ' ')
-    tm_idxmmu13 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-                                 name='tm_idxmmu13',
-                                 input=output_from(tm_fasta),
-                                 filter=formatter('(?P<TRANSCRIPTOME>mmu_mm9_\w+)\.transcripts\.fa\.gz'),
-                                 output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k13.idx/rsd.bin',
-                                 extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
-
+    # k=19 - read length ~50
     cmd = config.get('Pipeline', 'genidx19').replace('\n', ' ')
     tm_idxgen19 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                                  name='tm_idxgen19',
@@ -489,7 +485,7 @@ def build_pipeline(args, config, sci_obj):
 
     run_task_transmodel = pipe.merge(task_func=touch_checkfile,
                                      name='task_transmodel',
-                                     input=output_from(tm_fasta, tm_idxhsa31, tm_idxmmu13, tm_idxgen19),
+                                     input=output_from(tm_fasta, tm_idxgen31, tm_idxgen19),
                                      output=os.path.join(dir_task_transmodel, 'run_task_transmodel.chk')).mkdir(dir_task_transmodel)
     #
     # End of major task: transcript model
