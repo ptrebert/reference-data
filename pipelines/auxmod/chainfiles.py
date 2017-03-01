@@ -41,7 +41,10 @@ def build_chain_filter_commands(chainfiles, chromref, outpath, cmd, jobcall):
         target, query = fn.split('.', 1)[0].split('To')
         query = query[:1].lower() + query[1:]
         tselect = chrom_select[target]
-        qselect = chrom_select[query]
+        try:
+            qselect = chrom_select[query]
+        except KeyError:
+            continue
         tmp = cmd.format(**{'targetchroms': tselect, 'querychroms': qselect})
         outputname = '{}_to_{}.filt.chain.gz'.format(target, query)
         outputpath = os.path.join(outpath, outputname)
