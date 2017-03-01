@@ -520,7 +520,7 @@ def build_pipeline(args, config, sci_obj):
                                    name='orthomam_init',
                                    output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.zip'))
 
-    cmd = config.get('Pipeline', 'orthomamraw')
+    cmd = config.get('Pipeline', 'orthomamraw').replace('\n', ' ')
     orthomam_raw = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                                   name='orthomam_raw',
                                   input=output_from(orthomam_init),
