@@ -516,6 +516,18 @@ def build_pipeline(args, config, sci_obj):
                             match_ortholog_files(ortho_files, genemodel_dir, subset_files, outdir, cmd, jobcall),
                             name='ortho_conv').mkdir(outdir)
 
+    orthomam_init = pipe.originate(task_func=lambda x: x,
+                                   name='orthomam_init',
+                                   output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.zip'))
+
+    cmd = config.get('Pipeline', 'orthomamraw')
+    orthomam_raw = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='orthomam_raw',
+                                  input=output_from(orthomam_init),
+                                  filter=formatter(),
+                                  output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.tsv'),
+                                  extras=[cmd, jobcall])
+
     #
     # End of major task: orthologs
     # ================================
