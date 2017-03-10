@@ -74,6 +74,10 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/mm9-mouse/mm9-blacklist.bed.gz
 - 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/hg38-human/hg38.blacklist.bed.gz
 - 2017-02-28    http://www.orthomam.univ-montp2.fr/orthomam/html/ [selection: OrthoMaM v9: CDS; homo, mus, sus, canis, bos: 10010 results]
+- 2017-03-03    http://www.orthodb.org/v9/download/odb9_OGs.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
+- 2017-03-03    http://www.orthodb.org/v9/download/odb9_OG2genes.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
+- 2017-03-03    http://www.orthodb.org/v9/download/odb9_OGs.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
+
 
 ## UCSC Chainfiles
 
