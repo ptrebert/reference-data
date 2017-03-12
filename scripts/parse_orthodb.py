@@ -5,6 +5,7 @@ import os as os
 import sys as sys
 import pandas as pd
 import numpy as np
+import collections as col
 import traceback as trb
 import argparse as argp
 
@@ -155,6 +156,49 @@ def reduce_to_subset(df, subsetpath):
     joined_subset = joined_subset.merge(all_subsets, on='gene_name', how='outer')
     joined_subset = joined_subset.dropna(axis=0, how='any', inplace=False,
                                          subset=['gene_name', 'og_id', 'species'])
+    # what follows:
+    # the OrthoDB flat files seem not to have a clear info about the "hierarchy"
+    # among the clades, so this simple heuristic selects the maximal set of OG IDs
+    # that do not contain gene duplicates
+
+    # first 9 characters of OG ID are the clade ID
+    clade_ids = set(joined_subset['og_id'].str.slice(start=0, stop=9).unique())
+    # make a temp working copy of the dataset
+    clade_data = joined_subset.copy()
+    clade_counter = col.Counter()
+    for cid in clade_ids:
+        subs = clade_data.loc[clade_data['og_id'].str.startswith(cid), :]
+        clade_counter[cid] = subs.shape[0]
+    select_ogids = set()
+    remove_ogids = set()
+    selected_genes = set()
+    for cid, _ in clade_counter.most_common():
+        subs = clade_data.loc[clade_data['og_id'].str.startswith(cid), :]
+        if subs.empty:
+            continue
+        for ogid in subs['og_id'].unique():
+            sub_sub = subs.loc[subs['og_id'] == ogid, 'gene_name'].tolist()
+            if len(set(sub_sub)) != len(sub_sub):
+                # no clue what kind of ortholog group could contain the same
+                # gene twice or more - what is that? just discard...
+                remove_ogids.add(ogid)
+                continue
+            if any([g in selected_genes for g in sub_sub]):
+                remove_ogids.add(ogid)
+            else:
+                remove_ogids.add(ogid)
+                select_ogids.add(ogid)
+                selected_genes = selected_genes.union(set(sub_sub))
+        idx_remove = clade_data['og_id'].isin(remove_ogids)
+        clade_data = clade_data.loc[~idx_remove, :]
+        if clade_data.empty:
+            # this should happen automatically...
+            break
+    uniq_idx = joined_subset['og_id'].isin(select_ogids)
+    joined_subset = joined_subset.loc[uniq_idx, :]
+    num_genes = joined_subset['gene_name'].size
+    uniq_genes = joined_subset['gene_name'].unique().size
+    assert num_genes == uniq_genes, 'Mismatch: {} vs {}'.format(num_genes, uniq_genes)
     return joined_subset
 
 
