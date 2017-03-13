@@ -511,22 +511,42 @@ def build_pipeline(args, config, sci_obj):
     subset_files = collect_full_paths(pc_subset, '*.genes.*')
     genemodel_dir = bedout  # NB: if ever: should be renamed to gm_bedout for clarity
     cmd = config.get('Pipeline', 'orthconv').replace('\n', ' ')
-    outdir = os.path.join(dir_task_orthologs, 'hdf')
+    ortho_hdf_out = os.path.join(dir_task_orthologs, 'hdf')
     ortho_conv = pipe.files(sci_obj.get_jobf('in_out'),
-                            match_ortholog_files(ortho_files, genemodel_dir, subset_files, outdir, cmd, jobcall),
-                            name='ortho_conv').mkdir(outdir)
+                            match_ortholog_files(ortho_files, genemodel_dir, subset_files, ortho_hdf_out, cmd, jobcall),
+                            name='ortho_conv').mkdir(ortho_hdf_out)
 
-    orthomam_init = pipe.originate(task_func=lambda x: x,
-                                   name='orthomam_init',
-                                   output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.zip'))
+    # OrthoMam no longer used as source for orthologs
+    # orthomam_init = pipe.originate(task_func=lambda x: x,
+    #                                name='orthomam_init',
+    #                                output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.zip'))
+    #
+    # cmd = config.get('Pipeline', 'orthomamraw').replace('\n', ' ')
+    # orthomam_raw = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+    #                               name='orthomam_raw',
+    #                               input=output_from(orthomam_init),
+    #                               filter=formatter(),
+    #                               output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.tsv'),
+    #                               extras=[cmd, jobcall])
 
-    cmd = config.get('Pipeline', 'orthomamraw').replace('\n', ' ')
-    orthomam_raw = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-                                  name='orthomam_raw',
-                                  input=output_from(orthomam_init),
-                                  filter=formatter(),
-                                  output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.tsv'),
-                                  extras=[cmd, jobcall])
+    orthodb_init = pipe.originate(task_func=lambda x: x,
+                                  name='orthodb_init',
+                                  output=collect_full_paths(ortho_rawdata, '*.tab.gz'))
+
+    sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'orthodb_conv').replace('\n', ' ')
+    orthodb_conv = pipe.merge(task_func=sci_obj.get_jobf('ins_out'),
+                              name='orthodb_conv',
+                              input=output_from(orthodb_init),
+                              output=os.path.join(ortho_hdf_out, 'orthoDB_2015-v9_5vert.h5'),
+                              extras=[cmd, jobcall]).mkdir(ortho_hdf_out)
+    orthodb_conv = orthodb_conv.mkdir(ortho_hdf_out)
+    orthodb_conv = orthodb_conv.follows(run_task_genemodel)
 
     #
     # End of major task: orthologs

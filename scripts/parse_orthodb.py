@@ -172,7 +172,7 @@ def reduce_to_subset(df, subsetpath):
     select_ogids = set()
     remove_ogids = set()
     selected_genes = set()
-    for cid, _ in clade_counter.most_common():
+    for cid, _ in reversed(clade_counter.most_common()):
         subs = clade_data.loc[clade_data['og_id'].str.startswith(cid), :]
         if subs.empty:
             continue
@@ -196,9 +196,40 @@ def reduce_to_subset(df, subsetpath):
             break
     uniq_idx = joined_subset['og_id'].isin(select_ogids)
     joined_subset = joined_subset.loc[uniq_idx, :]
+    # record info about group sizes
+    ogid_abund = col.Counter(joined_subset['og_id'])
+    group_size = []
+    group_bal = []
+    for ogid, count in ogid_abund.most_common():
+        group_size.append([ogid, count])
+        # check if the group is at least balanced
+        this_group = col.Counter(joined_subset.loc[joined_subset['og_id'] == ogid, 'species'])
+        median = np.median([n for i, n in this_group.most_common()])
+        balanced = True
+        for i, n in this_group.most_common():
+            if (median - 1) <= n <= (median + 1):
+                pass
+            else:
+                balanced = False
+                break
+        if balanced:
+            group_bal.append([ogid, 1])
+        else:
+            group_bal.append([ogid, 0])
+    group_size = pd.DataFrame(group_size, columns=['og_id', 'group_size'])
+    group_bal = pd.DataFrame(group_bal, columns=['og_id', 'group_balanced'])
+    joined_subset = joined_subset.merge(group_size, on='og_id', how='outer')
+    assert joined_subset['group_size'].notnull().all(), 'Failed'
+    joined_subset = joined_subset.merge(group_bal, on='og_id', how='outer')
+    assert joined_subset['group_balanced'].notnull().all(), 'Failed'
     num_genes = joined_subset['gene_name'].size
     uniq_genes = joined_subset['gene_name'].unique().size
     assert num_genes == uniq_genes, 'Mismatch: {} vs {}'.format(num_genes, uniq_genes)
+    joined_subset = joined_subset.astype({'og_id': str, 'og_name': str, 'odb_gene_id': str,
+                                          'tax_id': np.int32, 'gene_name': str, 'chrom': str,
+                                          'start': np.int32, 'end': np.int32, 'strand': np.int8,
+                                          'symbol': str, 'species': str, 'group_size': np.int32,
+                                          'group_balanced': np.int8}, copy=True)
     return joined_subset
 
 
@@ -226,11 +257,14 @@ def main():
     :return:
     """
     args = parse_command_line()
-    if os.path.isfile(args.cache):
+    if args.cache != 'no_cache':
+        cache_dir = os.path.dirname(args.inputfiles[0])
+        setattr(args, 'cache', os.path.join(cache_dir, args.cache))
+    if args.cache == 'no_cache':
+        merged = raw_process_input(args)
+    elif os.path.isfile(args.cache):
         with pd.HDFStore(args.cache, 'r') as hdf:
             merged = hdf['raw']
-    elif args.cache == 'no_cache':
-        merged = raw_process_input(args)
     else:
         merged = raw_process_input(args)
         with pd.HDFStore(args.cache, 'w', complib='blosc', complevel=9) as hdf:
