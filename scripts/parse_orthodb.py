@@ -177,18 +177,22 @@ def reduce_to_subset(df, subsetpath):
         if subs.empty:
             continue
         for ogid in subs['og_id'].unique():
-            sub_sub = subs.loc[subs['og_id'] == ogid, 'gene_name'].tolist()
-            if len(set(sub_sub)) != len(sub_sub):
+            sub_spec = subs.loc[subs['og_id'] == ogid, 'species'].unique().tolist()
+            if len(sub_spec) != 5:
+                remove_ogids.add(ogid)
+                continue
+            sub_genes = subs.loc[subs['og_id'] == ogid, 'gene_name'].tolist()
+            if len(set(sub_genes)) != len(sub_genes):
                 # no clue what kind of ortholog group could contain the same
                 # gene twice or more - what is that? just discard...
                 remove_ogids.add(ogid)
                 continue
-            if any([g in selected_genes for g in sub_sub]):
+            if any([g in selected_genes for g in sub_genes]):
                 remove_ogids.add(ogid)
             else:
                 remove_ogids.add(ogid)
                 select_ogids.add(ogid)
-                selected_genes = selected_genes.union(set(sub_sub))
+                selected_genes = selected_genes.union(set(sub_genes))
         idx_remove = clade_data['og_id'].isin(remove_ogids)
         clade_data = clade_data.loc[~idx_remove, :]
         if clade_data.empty:
@@ -288,6 +292,7 @@ def main():
     with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
         hdf.put('/shared/raw', shared_merged, format='table')
     subset = reduce_to_subset(shared_merged, args.subsets)
+    assert not subset.empty, 'Created empty subset of data'
     with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
         hdf.put('/shared/subset', subset, format='table')
     md = collect_subset_metadata(subset)
