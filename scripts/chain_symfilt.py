@@ -464,6 +464,8 @@ def normalize_block_map(args):
                 tl = int(parts[2]) - int(parts[1])
                 ql = int(parts[7]) - int(parts[6])
                 assert tl == ql, 'Non-symmetric line in map file: num {} - {}'.format(bn, line)
+                if tl < args.minsize:
+                    continue
                 out_buffer.write('\t'.join(parts) + '\n')
                 if read > 524288:
                     _ = outf.write(out_buffer.getvalue())
