@@ -31,7 +31,8 @@ def parse_command_line():
     :return:
     """
     parser = argp.ArgumentParser(add_help=True)
-    parser.add_argument('--task', '-tk', type=str, choices=['symmfilt', 'normmap'], dest='task', required=True)
+    parser.add_argument('--task', '-tk', type=str, choices=['symmfilt', 'normmap', 'swap', 'dump'],
+                        dest='task', required=True)
 
     #parser.add_argument('--task', '-tk', type=str, choices=['chaintobed', 'qfilter', 'symmext',
     #                                                        'maptobedgraph', 'swap'], dest='task')
@@ -477,6 +478,43 @@ def normalize_block_map(args):
     return 0
 
 
+def swap_map(args):
+    """
+    :param args:
+    :return:
+    """
+    mapfile = args.mapfile
+    inverse = op.itemgetter(*(5, 6, 7, 3, 4, 0, 1, 2, 8))
+    with gz.open(mapfile, 'rt') as infile:
+        for line in infile:
+            if not line:
+                continue
+            cols = line.strip().split()
+            swl = '\t'.join(inverse(cols)) + '\n'
+            sys.stdout.write(swl)
+    return 0
+
+
+def dump_map(args):
+    """
+    :param args:
+    :return:
+    """
+
+    if args.query:
+        extract = op.itemgetter(*(5, 6, 7, 4))
+    else:
+        extract = op.itemgetter(*(0, 1, 2, 4))
+    with gz.open(args.mapfile, 'rt') as infile:
+        for line in infile:
+            if not line.strip():
+                continue
+            cols = line.strip().split()
+            out = '\t'.join(extract(cols)) + '\n'
+            sys.stdout.write(out)
+    return 0
+
+
 # ==========================================
 # outdated functions, currently not used
 # ==========================================
@@ -851,20 +889,7 @@ def map_to_bedgraph(mapfile, query):
     return 0
 
 
-def swap_map(mapfile):
-    """
-    :param mapfile:
-    :return:
-    """
-    inverse = op.itemgetter(*(5, 6, 7, 3, 4, 0, 1, 2, 8))
-    with gz.open(mapfile, 'rt') as infile:
-        for line in infile:
-            if not line:
-                continue
-            cols = line.strip().split()
-            swl = '\t'.join(inverse(cols)) + '\n'
-            sys.stdout.write(swl)
-    return
+
 
 
 def get_file_extension(args, which, compressed):
@@ -889,7 +914,9 @@ if __name__ == '__main__':
     try:
         args = parse_command_line()
         cmd_select = {'symmfilt': chain_symmetry_filter,
-                      'normmap': normalize_block_map}
+                      'normmap': normalize_block_map,
+                      'swap': swap_map,
+                      'dump': dump_map}
         run_cmd = cmd_select[args.task]
         _ = run_cmd(args)
     except Exception:
