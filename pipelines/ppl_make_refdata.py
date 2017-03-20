@@ -819,6 +819,34 @@ def build_pipeline(args, config, sci_obj):
                                 output_dir=normblocks_dir,
                                 extras=[cmd, jobcall]).mkdir(normblocks_dir)
 
+    # the following task is a sanity check only
+    # dump the generated blocks to BED-like format and
+    # run liftOver to see how close the output is
+    cmd = config.get('Pipeline', 'dumptrg')
+    liftover_dir = os.path.join(dir_task_chainfiles, 'liftover_test')
+    dumptrg = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                             name='dumptrg',
+                             input=output_from(normblocks),
+                             filter=formatter('(?P<TRG>hg19)_to_(?P<QRY>mm9)\.norm\.symmmap\.tsv\.gz'),
+                             output=os.path.join(liftover_dir, '{TRG[0]}_to_{QRY[0]}.blocks.bed'),
+                             extras=[cmd, jobcall]).mkdir(liftover_dir)
+
+    cmd = config.get('Pipeline', 'dumpqry')
+    dumpqry = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                             name='dumpqry',
+                             input=output_from(normblocks),
+                             filter=formatter('(?P<TRG>hg19)_to_(?P<QRY>mm9)\.norm\.symmmap\.tsv\.gz'),
+                             output=os.path.join(liftover_dir, '{QRY[0]}_from_{TRG[0]}.blocks.bed'),
+                             extras=[cmd, jobcall]).mkdir(liftover_dir)
+
+    cmd = config.get('Pipeline', 'liftover').replace('\n', ' ')
+    liftover = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                              name='liftover',
+                              input=output_from(dumptrg),
+                              filter=formatter('(?P<BLOCKS>hg19_to_mm9).blocks.bed'),
+                              output=os.path.join(liftover_dir, '{BLOCKS[0]}.lifted.bed'),
+                              extras=[cmd, jobcall]).mkdir(liftover_dir)
+
     sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
     if args.gridmode:
         jobcall = sci_obj.ruffus_gridjob()
