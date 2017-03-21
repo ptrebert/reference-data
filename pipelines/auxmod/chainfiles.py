@@ -5,6 +5,8 @@ Some helper functions to process UCSC chain files
 """
 
 import os as os
+import json as js
+import collections as col
 
 from pipelines.auxmod.auxiliary import read_chromsizes, collect_full_paths
 
@@ -77,3 +79,65 @@ def build_symm_filter_commands(chainfiles, chromref, outpath, cmd, jobcall):
     if len(chainfiles) > 0:
         assert params, 'No parameters created for chain symmetry filtering'
     return params
+
+
+def check_lifted_blocks(inputfiles, outputfile):
+    """
+    :param inputfiles:
+    :param outputfile:
+    :return:
+    """
+    if 'lifted' in inputfiles[0]:
+        liftfile = inputfiles[0]
+        origfile = inputfiles[1]
+    else:
+        liftfile = inputfiles[1]
+        origfile = inputfiles[0]
+    cov = col.Counter()
+    last_l = []
+    last_b = []
+    with open(origfile, 'r') as orig:
+        with open(liftfile, 'r') as lift:
+            while 1:
+                if last_b:
+                    bl = last_b
+                    last_b = []
+                else:
+                    bl = _parse_block(orig.readline())
+                if last_l:
+                    ll = last_l
+                    last_l = []
+                else:
+                    ll = _parse_block(lift.readline())
+                if bl is None and ll is None:
+                    break
+                if bl is None:
+                    cov['lift_cov'] += ll[3] - ll[2]
+                if ll is None:
+                    cov['base_cov'] += bl[3] - bl[2]
+                if bl[0] == ll[0]:
+                    cov['base_cov'] += bl[3] - bl[2]
+                    cov['lift_cov'] += ll[3] - ll[2]
+                    cov['shared_cov'] += max(min(bl[3], ll[3]) - max(bl[2], ll[2]), 0)
+                elif bl[0] > ll[0]:
+                    last_b = bl
+                    cov['lift_cov'] += ll[3] - ll[2]
+                elif bl[0] < ll[0]:
+                    last_l = ll
+                    cov['base_cov'] += bl[3] - bl[2]
+                else:
+                    raise RuntimeError('Unconsidered situation: {} and {}'.format(bl, ll))
+    with open(outputfile, 'w') as dump:
+        js.dump(dump, cov, indent=1, sort_keys=True)
+    return outputfile
+
+
+def _parse_block(line):
+    """
+    :param line:
+    :return:
+    """
+    if not line.strip():
+        return None
+    parts = line.strip().split()
+    return int(parts[3]), parts[0], int(parts[1]), int(parts[2])

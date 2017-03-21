@@ -847,6 +847,21 @@ def build_pipeline(args, config, sci_obj):
                               output=os.path.join(liftover_dir, '{BLOCKS[0]}.lifted.bed'),
                               extras=[cmd, jobcall]).mkdir(liftover_dir)
 
+    blockfiles = [os.path.join(liftover_dir, fn) for fn in ['hg19_to_mm9.lifted.bed',
+                                                            'mm9_from_hg19.blocks.bed']]
+
+    cmd = config.get('Pipeline', 'sortblocks')
+    sortblocks = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='sortblocks',
+                                input=blockfiles,
+                                filter=suffix('.bed'),
+                                output='.sort.bed',
+                                output_dir=liftover_dir,
+                                extras=[cmd, jobcall])
+    sortblocks = sortblocks.active_if(os.path.isfile(blockfiles[0]))
+
+
+
     sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
     if args.gridmode:
         jobcall = sci_obj.ruffus_gridjob()
