@@ -132,3 +132,44 @@ In the script provided by the UCSC support, these values are set to:
 
 Setting these parameters to non-default values dramatically increases the number of missing bases,
 for unclear reasons.
+
+
+### Chain scoring
+
+Apparently, there is no precise/formal description of how chain scores are derived (truth may be in the code).
+In this [UCSC google groups thread](https://groups.google.com/a/soe.ucsc.edu/d/msg/genome/C7Wxn01IzQk/wHpOkr9mWAoJ), Angie (UCSC) states that
+
+> In a nutshell, the chain scoring scheme is somewhat complicated,
+> but ballpark estimates of scores can be made from expected size of aligned blocks, 
+> percent identity, gap size and gap frequency. [...]
+> Gaps in chains are penalized with a piecewise linear function that penalizes gap openings the most, 
+> with less harsh penalties as gaps are larger 
+> (we expect large gaps in cross-species alignments due to insertions, rearrangements etc.) [...]
+> Another approach to making sense of chain scores is to look at chain score histograms, 
+> e.g. for all chains or for chains of a particular length and gap size extracted using chainFilter.
+
+Besides (manual) score filtering using the above mentioned histogram method, in this
+[UCSC google groups thread](https://groups.google.com/a/soe.ucsc.edu/d/msg/genome/zcHuWtmw-LE/5hClwQ4furIJ), Rachel (UCSC) mentions that
+
+> Regarding filtering, if there are a lot of low scoring chains e.g. those
+> with score < 5000 then often we filter these out using the minScore option
+> for axtChain. Chains can also be filtered after they are made using the
+> chainFilter program.  chainPreNet does remove chains that do not have a
+> chance of being netted. Then chainNet makes the alignments nets from
+> chains using the highest scoring chains in the top level. Gaps are
+> filled in with other chains at level 2 and then gaps in the
+> level 2 chains can be filled in with chains in level 3 etc. In the net,
+> chains are trimmed to fit into these sections that are not covered by a
+> higher-scoring chain. We also use netFilter with the minGap option set to
+> 12 before loading the net into the database. This restricts the nets to
+> those with a gap size >= 12 bp.
+
+However, there seems not to be an overall good strategy as stated by Angie (UCSC) in this
+[UCSC google groups thread](https://groups.google.com/a/soe.ucsc.edu/d/msg/genome/aoOw3z7u0Qk/cMzhkAdjeuwJ)
+ 
+> Picking a score threshold for chains is a tricky business... scores
+> vary hugely with length as well as conservation.  This scoring scheme
+> allows us to recognize long chains in syntenic regions, but it also
+> retains almost anything from blastz.  That's why we also have the
+> "net" tracks -- to keep the best chains and ignore most of the
+> "fluff".
