@@ -197,7 +197,14 @@ def read_value_mapping(fpath):
         for line in infile:
             if not line.strip():
                 continue
-            k, v = line.strip().split()
+            try:
+                k, v = line.strip().split(maxsplit=1)
+                # another jump through a hoop for those funny people
+                # out there who think whitespaces should be part of
+                # a gene name...
+                v = v.replace(' ', '-')
+            except ValueError as ve:
+                raise ValueError('Cannot process line: {}\nError: {}'.format(line.strip(), str(ve)))
             assert k not in valmap, 'Duplicate key {} in mapping file {}'.format(k, fpath)
             valmap[k] = v
     return valmap

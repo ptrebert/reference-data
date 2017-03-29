@@ -45,12 +45,10 @@ def parse_command_line():
     parser.add_argument('--trans-out', '-to', type=str, dest='transout')
     parser.add_argument('--map-out', '-mo', type=str, dest='mapout')
     parser.add_argument('--input-type', '-ity', type=str, choices=['gencode', 'ensucsc', 'ensbta'], dest='inputtype')
-    parser.add_argument('--gencode-basic', action='store_true', default=False, dest='gencodebasic',
-                        help='From GENCODE: "basic identifies a subset of representative transcripts for each gene;'
-                             ' prioritises full-length protein coding transcripts over partial or'
-                             ' non-protein coding transcripts within the same gene, and intends to highlight'
-                             ' those transcripts that will be useful to the majority of users."')
-    parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9XY][0-9AB]?$", dest='chrom')
+    parser.add_argument('--ccds-only', action='store_true', default=False, dest='ccdsonly',
+                        help='From GENCODE: "member of the consensus CDS gene set, '
+                             'confirming coding regions between ENSEMBL, UCSC, NCBI and HAVANA."')
+    parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9XYZW][0-9AB]?$", dest='chrom')
     args = parser.parse_args()
     return args
 
@@ -119,6 +117,17 @@ def trans_column_selector(intype):
     return selector[intype]
 
 
+def non_na_selector(intype):
+    """
+    :param intype:
+    :return:
+    """
+    selector = {'gencode': op.itemgetter(*('gene_id', 'gene_name')),
+                'ensucsc': op.itemgetter(*('name', 'gene_name')),
+                'ensbta': op.itemgetter(*('ID', 'Gene_name'))}
+    return selector[intype]
+
+
 def select_protein_coding_subset(args):
     """
     :param args:
@@ -129,16 +138,18 @@ def select_protein_coding_subset(args):
     feature_entry = feature_selector(args.inputtype)
     gene_columns = gene_column_selector(args.inputtype)
     trans_columns = trans_column_selector(args.inputtype)
+    nonna_values = non_na_selector(args.inputtype)
     subset = subset_value_selector(args.inputtype, args.subset)
     genes = []
     transcripts = []
     use_genes = set()
-    basic_set = args.inputtype == 'gencode' and args.gencodebasic
+    basic_set = args.inputtype == 'gencode' and args.ccdsonly
     chrom_filter = re.compile(args.chrom.strip('"'))
     filter_stats = {'biotype': col.Counter(), 'feattype': col.Counter(),
                     'featsize': col.Counter(), 'featsize_names': [],
                     'featloc': col.Counter(), 'featloc_names': [],
-                    'nonbasic': col.Counter(), 'nonbasic_names': []}
+                    'featna': col.Counter(), 'featna_names': [],
+                    'non_ccds': col.Counter(), 'non_ccds_names': []}
     with opn(args.input, mode) as infile:
         rows = csv.DictReader(infile, delimiter='\t')
         for r in rows:
@@ -148,6 +159,7 @@ def select_protein_coding_subset(args):
             if r[subset_entry] in subset or any([s in r[subset_entry] for s in subset]):
                 feat = r[feature_entry]
                 if feat == 'gene':
+                    not_na = nonna_values(r)
                     this_gene = list(gene_columns(r))
                     this_gene[3] = this_gene[3].split('.')[0]
                     gene_length = int(this_gene[2]) - int(this_gene[1])
@@ -159,6 +171,10 @@ def select_protein_coding_subset(args):
                         filter_stats['featloc']['gene'] += 1
                         filter_stats['featloc_names'].append([this_gene[3], this_gene[0]])
                         continue
+                    if any([v == 'n/a' for v in not_na]):
+                        filter_stats['featna']['gene'] += 1
+                        filter_stats['featna_names'].append([this_gene[3]] + list(not_na))
+                        continue
                     use_genes.add(this_gene[3])
                     genes.append(this_gene)
                 elif feat == 'transcript':
@@ -166,9 +182,9 @@ def select_protein_coding_subset(args):
                     this_trans[3] = this_trans[3].split('.')[0]
                     this_trans[-1] = this_trans[-1].split('.')[0]
                     if basic_set:
-                        if r['tag'] != 'basic':
-                            filter_stats['nonbasic']['transcript'] += 1
-                            filter_stats['nonbasic_names'].append([this_trans[3], r['tag']])
+                        if r['tag'] != 'CCDS':
+                            filter_stats['non_ccds']['transcript'] += 1
+                            filter_stats['non_ccds_names'].append([this_trans[3], r['tag']])
                             continue
                     if chrom_filter.match(this_trans[0]) is None:
                         filter_stats['featloc']['transcript'] += 1
