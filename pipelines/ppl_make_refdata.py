@@ -897,12 +897,23 @@ def build_pipeline(args, config, sci_obj):
     merge_blocks = merge_blocks.mkdir(chf_mrgblocks)
     merge_blocks = merge_blocks.follows(crossmap)
 
+    cmd = config.get('Pipeline', 'switchblocks').replace('\n', ' ')
+    switch_blocks = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                   name='switch_blocks',
+                                   input=output_from(trgbbed),
+                                   filter=formatter('(?P<TARGET>hg19)_to_(?P<QUERY>mm9)(?P<EXT>\.[\w\.]+)'),
+                                   output=os.path.join(chf_mrgblocks, '{QUERY[0]}_to_{TARGET[0]}.aln.tsv.gz'),
+                                   extras=[cmd, jobcall])
+    switch_blocks = switch_blocks.follows(merge_blocks)
+
+    alntsv_re = '(?P<TARGET>\w+)_to_(?P<QUERY>\w+)(?P<EXT>\.[\w\.]+)'
+
     cmd = config.get('Pipeline', 'mapidx').replace('\n', ' ')
     hdfmap_dir = os.path.join(dir_task_chainfiles, 'hdf_map')
     mapidx = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                             name='mapidx',
-                            input=output_from(merge_blocks),
-                            filter=formatter(rbest_re),
+                            input=output_from(merge_blocks, switch_blocks),
+                            filter=formatter(alntsv_re),
                             output=os.path.join(hdfmap_dir, '{TARGET[0]}_to_{QUERY[0]}.idx.h5'),
                             extras=[cmd, jobcall])
     mapidx = mapidx.mkdir(hdfmap_dir)
@@ -913,7 +924,7 @@ def build_pipeline(args, config, sci_obj):
                                                    qrybnet, qrybchain, trgbchain, trgbfilt,
                                                    trgbbed, crossmap, liftover,
                                                    trgselfovl, cmqselfovl, lfqselfovl,
-                                                   merge_blocks, mapidx),
+                                                   merge_blocks, switch_blocks, mapidx),
                                  output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
 
     # # cmd = config.get('Pipeline', 'rbestnet').replace('\n', ' ')

@@ -7,6 +7,8 @@ import io as io
 import traceback as trb
 import argparse as argp
 import gzip as gz
+import operator as op
+import functools as fnt
 
 
 def parse_command_line():
@@ -17,8 +19,28 @@ def parse_command_line():
     parser.add_argument('--target', '-t', type=str, dest='target')
     parser.add_argument('--query', '-q', type=str, dest='query')
     parser.add_argument('--output', '-o', type=str, dest='output')
+    parser.add_argument('--switch', '-s', action='store_true', default=False,
+                        help='Switch target and query in the output', dest='switch')
     args = parser.parse_args()
     return args
+
+
+def join_parts(switch, *args):
+    """
+    :param switch:
+    :param args: tc, ts, te, tstr, bc, qc, qs, qe, qstr
+    :return:
+    """
+    if switch:
+        items = op.itemgetter(*(5, 6, 7, 3,  # the new target / original query region
+                                4,  # block ID
+                                0, 1, 2, 8))  # the new query / original target region
+    else:
+        items = op.itemgetter(*(0, 1, 2, 3,  # the target region
+                                4,  # block ID
+                                5, 6, 7, 8))  # the query region
+    joined = '\t'.join(items(args))
+    return joined
 
 
 def main():
@@ -30,6 +52,7 @@ def main():
     bufsize = 0
     block_count = 0
     block_ids = set()
+    build_block = fnt.partial(join_parts, (args.switch, ))
     with open(args.target, 'r') as trgfile:
         with open(args.query, 'r') as qryfile:
             while 1:
@@ -54,8 +77,11 @@ def main():
                                                                                         tb, qb)
                     block_count += 1
                     qstrand = qid.split('_')[-1]
-                    blockline = '\t'.join([tc, ts, te, '+', str(block_count),
-                                           qc, qs, qe, qstrand])
+                    #blockline = '\t'.join([tc, ts, te, '+', str(block_count),
+                    #                       qc, qs, qe, qstrand])
+                    blockline = build_block(tc, ts, te, '+',
+                                            str(block_count),
+                                            qc, qs, qe, qstrand)
                     bufsize += len(blockline)
                     outbuffer.write(blockline + '\n')
                     if bufsize > 100000:
