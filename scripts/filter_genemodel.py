@@ -117,6 +117,17 @@ def trans_column_selector(intype):
     return selector[intype]
 
 
+def exon_column_selector(intype):
+    """
+    :param intype:
+    :return:
+    """
+    selector = {'gencode': op.itemgetter(*('#chrom', 'start', 'end', 'strand', 'transcript_id', 'exon_id')),
+                'ensbta': op.itemgetter(*('#seqid', 'start', 'end', 'strand', 'Parent', 'ID')),
+                'ensucsc': op.itemgetter(*('#chrom', 'exonStarts', 'exonEnds'))}
+    return selector[intype]
+
+
 def non_na_selector(intype):
     """
     :param intype:
@@ -138,6 +149,7 @@ def select_protein_coding_subset(args):
     feature_entry = feature_selector(args.inputtype)
     gene_columns = gene_column_selector(args.inputtype)
     trans_columns = trans_column_selector(args.inputtype)
+    exon_columns = exon_column_selector(args.inputtype)
     nonna_values = non_na_selector(args.inputtype)
     subset = subset_value_selector(args.inputtype, args.subset)
     genes = []
@@ -150,6 +162,8 @@ def select_protein_coding_subset(args):
                     'featloc': col.Counter(), 'featloc_names': [],
                     'featna': col.Counter(), 'featna_names': [],
                     'non_ccds': col.Counter(), 'non_ccds_names': []}
+    exon_collector = col.defaultdict(list)
+    split_exons = args.inputtype == 'ensucsc'
     with opn(args.input, mode) as infile:
         rows = csv.DictReader(infile, delimiter='\t')
         for r in rows:
@@ -191,6 +205,25 @@ def select_protein_coding_subset(args):
                         filter_stats['featloc_names'].append([this_trans[3], this_trans[0]])
                         continue
                     transcripts.append(this_trans)
+                    if split_exons:
+                        all_exons = list(exon_columns(r))
+                        all_starts = all_exons[1].strip(',').split(',')
+                        all_ends = all_exons[2].strip(',').split(',')
+                        assert len(all_starts) == len(all_ends),\
+                            'Exon start - ends differ: {} and {}'.format(all_starts, all_ends)
+                        for i, (s, e) in enumerate(zip(all_starts, all_ends)):
+                            name = 'Exon' + str(i)
+                            exon_collector[this_trans[3]].append((int(s), int(e), this_trans[5], name))
+                elif feat == 'exon':
+                    this_exon = list(exon_columns(r))
+                    if chrom_filter.match(this_exon[0]) is None:
+                        filter_stats['featloc']['exon'] += 1
+                        filter_stats['featloc_names'].append([this_exon[4], this_exon[0]])
+                        continue
+                    strand = this_exon[3]
+                    exon_id = this_exon[-1].split('.')[0]
+                    transcript = this_exon[-2].split('.')[0]
+                    exon_collector[transcript].append((int(this_exon[1]), int(this_exon[2]), strand, exon_id))
                 else:
                     filter_stats['feattype'][feat] += 1
                     continue
@@ -219,7 +252,34 @@ def select_protein_coding_subset(args):
         writer = csv.writer(outf, delimiter='\t')
         writer.writerow(gene_header)
         writer.writerows(genes)
-    trans_header = ['#chrom', 'start', 'end', 'name', 'score', 'strand', 'transcript_name', 'gene_id']
+    trans_header = ['#chrom', 'start', 'end', 'name', 'score', 'strand', 'transcript_name',
+                    'gene_id', 'exon_ids', 'exon_starts', 'exon_ends']
+    for trans in transcripts:
+        ex_info = exon_collector[trans[3]]
+        trans_strand = trans[5]
+        ex_info = sorted(ex_info)
+        # This shit here: the annotation for bosTau7 shows some
+        # interesting features, e.g., annotated exons for a transcript
+        # on the opposite strand (Ex.: ENSBTAT00000003589 / ENSBTAE00000028999)
+        # or exons outside of the transcript boundaries (Ex.: ENSBTAT00000032823 / ENSBTAE00000473587)
+        # Exons that do not match the strand of the transcript will simply be dropped
+        # Exons outside of the transcript boundaries will be used to adjust transcript coordinates
+        ex_info = [e for e in ex_info if e[2] == trans_strand]
+        trans.append(','.join([t[3] for t in ex_info]))
+        starts = [t[0] for t in ex_info]
+        ends = [t[1] for t in ex_info]
+        try:
+            assert int(trans[1]) <= min(starts), 'Start coordinates mismatch: {} vs {} ({})'.format(starts, trans[1], trans[3])
+        except AssertionError:
+            sys.stderr.write('\nWarning: exon start before transcript start - adjusting transcript coordinates\n')
+            trans[1] = str(min(starts))
+        try:
+            assert max(ends) <= int(trans[2]), 'End coordinates mismatch: {} vs {} ({})'.format(ends, trans[2], trans[3])
+        except AssertionError:
+            sys.stderr.write('\nWarning: exon end after transcript end - adjusting transcript coordinates\n')
+            trans[2] = str(max(ends))
+        trans.append(','.join([str(s) for s in starts]))
+        trans.append(','.join([str(e) for e in ends]))
     opn, mode = det_open_mode(args.transout, False)
     with opn(args.transout, mode) as outf:
         writer = csv.writer(outf, delimiter='\t')

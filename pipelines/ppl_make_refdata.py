@@ -463,7 +463,7 @@ def build_pipeline(args, config, sci_obj):
     else:
         jobcall = sci_obj.ruffus_localjob()
 
-    dir_tm_mapindex = os.path.join(dir_task_transmodel, 'mapindex')
+    dir_tm_qindex = os.path.join(dir_task_transmodel, 'qindex')
 
     # k=31 - read length ~75 and above; Salmon does not support higher values for k
     # k=31 is the developer's recommendation for read length of 75
@@ -473,7 +473,8 @@ def build_pipeline(args, config, sci_obj):
                                  input=output_from(tm_fasta),
                                  filter=formatter('(?P<TRANSCRIPTOME>(hsa|mmu)_\w+)\.transcripts\.fa\.gz'),
                                  output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k31.idx/rsd.bin',
-                                 extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
+                                 extras=[cmd, jobcall])
+    tm_idxgen31 = tm_idxgen31.mkdir(dir_tm_qindex)
 
     # k=19 - read length ~50
     cmd = config.get('Pipeline', 'genidx19').replace('\n', ' ')
@@ -482,7 +483,8 @@ def build_pipeline(args, config, sci_obj):
                                  input=output_from(tm_fasta),
                                  filter=formatter('(?P<TRANSCRIPTOME>(cfa|bta|mmu|ssc|gga)_\w+)\.transcripts\.fa\.gz'),
                                  output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k19.idx/rsd.bin',
-                                 extras=[cmd, jobcall]).mkdir(dir_tm_mapindex)
+                                 extras=[cmd, jobcall])
+    tm_idxgen19 = tm_idxgen19.mkdir(dir_tm_qindex)
 
     run_task_transmodel = pipe.merge(task_func=touch_checkfile,
                                      name='task_transmodel',

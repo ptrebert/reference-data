@@ -75,14 +75,11 @@ def read_transcript_bed(fp, offset):
     """
     opn, mode = det_open_mode(fp, True)
     coords = []
-    get_coords = op.itemgetter(*('#chrom', 'start', 'end', 'name', 'strand'))
+    get_coords = op.itemgetter(*('#chrom', 'name', 'strand', 'exon_starts', 'exon_ends'))
     with opn(fp, mode) as infile:
         rows = csv.DictReader(infile, delimiter='\t')
         for r in rows:
-            trans = list(get_coords(r))
-            trans[1] = int(trans[1])
-            trans[2] = int(trans[2]) + offset
-            coords.append(tuple(trans))
+            coords.append(get_coords(r))
     return coords
 
 
@@ -106,9 +103,12 @@ def build_transcriptome(transcripts, seqfile, outfile):
                 _ = outf.write(outbuffer.getvalue())
             mode = mode.replace('w', 'a')
             outbuffer = io.StringIO()
-        minus = t[4] == '-'
-        trans_seq = check_need_rc(chrom_seq[t[1]:t[2]], minus)
-        outbuffer.write('>{}\n'.format(t[3]))
+        minus = t[2] == '-'
+        trans_seq = ''
+        for s, e in zip(t[3].split(','), t[4].split(',')):
+            trans_seq += chrom_seq[int(s):int(e)]
+        trans_seq = check_need_rc(trans_seq, minus)
+        outbuffer.write('>{}\n'.format(t[1]))
         for idx in range(0, len(trans_seq), 80):
             outbuffer.write(trans_seq[idx:idx+80] + '\n')
     with opn(outfile, mode) as outf:
