@@ -161,6 +161,20 @@ def compute_naive_support(orthologs):
     return orthologs
 
 
+def read_hcop_table(fpath):
+    """
+    :param fpath:
+    :return:
+    """
+
+    df = pd.read_csv(fpath, delimiter='\t', header=0, skip_blank_lines=True,
+                     na_values='-')
+    species = set([c.split('_')[0] for c in df.columns])
+    assert len(species) == 2, 'Could not identify species: {}'.format(df.columns.tolist())
+
+
+
+
 def main():
     """
     :return:
