@@ -1,6 +1,7 @@
 name: pplref
 channels:
   - bioconda
+  - conda-forge
 dependencies:
   - python=3.5
   - numpy=1.11.2
@@ -11,7 +12,7 @@ dependencies:
   - ucsc-fatotwobit
   - ucsc-twobittofa
   - ucsc-twobitinfo
-  - salmon=0.7.2
+  - salmon=0.8.2
   - ucsc-chainfilter
   - ucsc-chainnet
   - ucsc-chainprenet
