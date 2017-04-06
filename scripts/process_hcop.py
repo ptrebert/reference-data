@@ -98,18 +98,18 @@ def dump_hcop_data(dataset, other, group_root, outpath, mode):
     return
 
 
-def select_ortholog_pairs(hcop, human, other, species, filter):
+def select_ortholog_pairs(hcop, human, other, species, locfilter):
     """
     :param hcop:
     :param human:
     :param other:
-    :param filter:
+    :param locfilter:
     :return:
     """
     other_name = '{}_name'.format(species)
 
-    human_select = human['chrom'].str.match(filter, as_indexer=True)
-    other_select = other['chrom'].str.match(filter, as_indexer=True)
+    human_select = human['chrom'].str.match(locfilter, as_indexer=True)
+    other_select = other['chrom'].str.match(locfilter, as_indexer=True)
     human_subset = human.loc[human_select, 'human_name'].unique()
     other_subset = other.loc[other_select, other_name].unique()
 
