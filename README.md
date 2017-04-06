@@ -79,6 +79,30 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-03-03    http://www.orthodb.org/v9/download/odb9_OGs.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
 
 
+## OrthoDB flat files
+odb9_OGs.tab.gz - Ortho DB orthologous groups
+
+1.	OG unique id (not stable between releases)
+2.	level tax_id on which the cluster was built
+3.	OG name (the group's most common gene name)
+
+odb9_OG2genes.tab.gz - OGs to genes correspondence
+
+1.	OG unique id
+2.	Ortho DB unique gene id
+
+odb9_genes.tab.gz - genes with some info
+
+odb9_genes.tab
+1.	Ortho DB unique gene id (not stable between releases)
+2.	organism tax id
+3.	protein sequence id, as downloaded together with the sequence
+4.	Uniprot id, evaluated by mapping
+5.	ENSEMBL gene name, evaluated by mapping
+6.	NCBI gid, evaluated by mapping
+7.	description, evaluated by mapping
+
+
 ## UCSC Chainfiles
 
 ### Chains and Nets
