@@ -28,6 +28,8 @@ def parse_command_line():
     parser.add_argument('--cache-file', '-cf', type=str, dest='cache', default='no_cache')
     parser.add_argument('--annotation', '-ann', type=str, dest='annotation')
     parser.add_argument('--output', '-o', type=str, dest='outputfile')
+    parser.add_argument('--strategy', '-s', type=str, choices=['top-down', 'bottom-up'],
+                        dest='strategy')
     args = parser.parse_args()
     return args
 
@@ -133,7 +135,7 @@ def read_gene_model(basedir, species):
     return genes
 
 
-def select_ortholog_pairs(dataset, a_genes, b_genes, a_name, b_name, locfilter):
+def select_ortholog_pairs(dataset, a_genes, b_genes, a_name, b_name, locfilter, strategy):
     """
     :param dataset:
     :param a_genes:
@@ -141,24 +143,65 @@ def select_ortholog_pairs(dataset, a_genes, b_genes, a_name, b_name, locfilter):
     :param a_name:
     :param b_name:
     :param locfilter:
+    :param strategy:
     :return:
     """
+    agname = '{}_name'.format(a_name)
     a_select = a_genes['chrom'].str.match(locfilter, as_indexer=True)
-    a_subset = a_genes.loc[a_select, '{}_name'.format(a_name)].unique()
-    print(a_subset.shape)
+    a_subset = a_genes.loc[a_select, agname].unique()
+    bgname = '{}_name'.format(b_name)
     b_select = b_genes['chrom'].str.match(locfilter, as_indexer=True)
-    b_subset = b_genes.loc[b_select, '{}_name'.format(b_name)].unique()
+    b_subset = b_genes.loc[b_select, bgname].unique()
 
     a_idx = dataset['gene_name'].isin(a_subset)
     b_idx = dataset['gene_name'].isin(b_subset)
 
     a_data = dataset.loc[a_idx, ['clade_id', 'og_id', 'gene_name']]
-    print(a_data.shape)
-    grps = a_data.groupby('og_id').count()
-    print((grps['gene_name'] == 1).sum())
-    a_data.columns = ['clade_id', 'og_id', '{}_name'.format(a_name)]
+    a_data.columns = ['clade_id', 'og_id', agname]
     b_data = dataset.loc[b_idx, ['clade_id', 'og_id', 'gene_name']]
-    b_data.columns = ['clade_id', 'og_id', '{}_name'.format(b_name)]
+    b_data.columns = ['clade_id', 'og_id', bgname]
+
+    merged = a_data.merge(b_data, on=['clade_id', 'og_id'], how='outer')
+    merged = merged.dropna(axis=0, how='any', subset=[agname, bgname], inplace=False)
+
+    clade_counts = col.Counter(merged['clade_id'])
+    if strategy == 'bottom-up':
+        counts = reversed(clade_counts.most_common())
+    else:
+        counts = clade_counts.most_common()
+    remove_ogids = set()
+    select_ogids = set()
+    select_genes = set()
+    for cid, _ in counts:
+        subs = merged.loc[merged['clade_id'] == cid, :]
+        if subs.empty:
+            continue
+        ogid_counts = subs.groupby('og_id').count()
+        match_idx = ogid_counts[agname] == ogid_counts[bgname]
+        rem_ogids = ogid_counts.loc[~match_idx, :].index
+        remove_ogids.add(rem_ogids)
+        ogid_counts = ogid_counts.loc[, :]
+        check_ogids = ogid_counts.loc[match_idx, :].index.unique()
+        for ogid in check_ogids:
+            sub_sub = subs.loc[subs['og_id'] == ogid, :]
+            if sub_sub[agname].unique().size != sub_sub[agname].size:
+                remove_ogids.add(ogid)
+                continue
+            if sub_sub[bgname].unique().size != sub_sub[bgname].size:
+                remove_ogids.add(ogid)
+                continue
+            if (sub_sub[agname].isin(select_genes)).any():
+                remove_ogids.add(ogid)
+                continue
+            if (sub_sub[bgname].isin(select_genes)).any():
+                remove_ogids.add(ogid)
+                continue
+            select_ogids.add(ogid)
+            select_genes.add(sub_sub[agname])
+            select_genes.add(sub_sub[bgname])
+        merged = merged.loc[~merged['og_id'].isin(remove_ogids), :]
+
+    # continue here: select og_ids from A and B, merge and return
 
     return 'foo'
 
@@ -169,37 +212,6 @@ def reduce_to_subset(df, subsetpath):
     :param subsetpath:
     :return:
     """
-    lookup = tax_ids()
-    mapfiles = os.listdir(subsetpath)
-    mapfiles = [os.path.join(subsetpath, fp) for fp in mapfiles if fp.endswith('.genes.bed.gz')]
-    subset_shared = set()
-    all_subsets = None
-    for mf in mapfiles:
-        species = os.path.basename(mf).split('_')[0]
-        sub_genes = read_subset(mf)
-        select_id = 0
-        for taxid, vals in lookup.items():
-            if species == vals['code']:
-                select_id = taxid
-                break
-        assert select_id != 0, 'No taxon ID selected: {}'.format(species)
-        spec_common = lookup[select_id]['name']
-        sub_genes['species'] = spec_common
-        if all_subsets is None:
-            all_subsets = sub_genes.copy()
-        else:
-            all_subsets = pd.concat([all_subsets, sub_genes], axis=0,
-                                    ignore_index=True, join='outer')
-        subset = df.loc[df['gene_name'].isin(sub_genes['gene_name']), :]
-        assert not subset.empty, 'No genes selected for species: {}'.format(species)
-        if not subset_shared:
-            subset_shared = set(subset['og_id'].tolist())
-        else:
-            subset_shared = subset_shared.intersection(set(subset['og_id'].tolist()))
-    joined_subset = df.loc[df['og_id'].isin(subset_shared), :].copy()
-    joined_subset = joined_subset.merge(all_subsets, on='gene_name', how='outer')
-    joined_subset = joined_subset.dropna(axis=0, how='any', inplace=False,
-                                         subset=['gene_name', 'og_id', 'species'])
     # what follows:
     # the OrthoDB flat files seem not to have a clear info about the "hierarchy"
     # among the clades, so this simple heuristic selects the maximal set of OG IDs
