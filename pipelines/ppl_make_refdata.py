@@ -521,23 +521,6 @@ def build_pipeline(args, config, sci_obj):
                              extras=[cmd, jobcall])
     proc_hcop = proc_hcop.mkdir(ortho_hdf_out)
 
-    # OrthoMam no longer used as source for orthologs
-    # orthomam_init = pipe.originate(task_func=lambda x: x,
-    #                                name='orthomam_init',
-    #                                output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.zip'))
-    #
-    # cmd = config.get('Pipeline', 'orthomamraw').replace('\n', ' ')
-    # orthomam_raw = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                               name='orthomam_raw',
-    #                               input=output_from(orthomam_init),
-    #                               filter=formatter(),
-    #                               output=os.path.join(ortho_rawdata, 'orthomam_v9_5vert_orthologs.tsv'),
-    #                               extras=[cmd, jobcall])
-
-    # orthodb_init = pipe.originate(task_func=lambda x: x,
-    #                               name='orthodb_init',
-    #                               output=collect_full_paths(ortho_rawdata, '*.tab.gz'))
-    #
     # sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
     # if args.gridmode:
     #     jobcall = sci_obj.ruffus_gridjob()
