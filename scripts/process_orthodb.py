@@ -8,6 +8,15 @@ import numpy as np
 import collections as col
 import traceback as trb
 import argparse as argp
+import fnmatch as fnm
+
+
+SPECIES_MAP = {'human': 'hsa',
+               'mouse': 'mmu',
+               'cow': 'bta',
+               'chicken': 'gga',
+               'dog': 'cfa',
+               'pig': 'ssc'}
 
 
 def parse_command_line():
@@ -17,7 +26,7 @@ def parse_command_line():
     parser = argp.ArgumentParser()
     parser.add_argument('--input', '-i', type=str, nargs='+', dest='inputfiles')
     parser.add_argument('--cache-file', '-cf', type=str, dest='cache', default='no_cache')
-    parser.add_argument('--subsets', '-sub', type=str, dest='subsets')
+    parser.add_argument('--annotation', '-ann', type=str, dest='annotation')
     parser.add_argument('--output', '-o', type=str, dest='outputfile')
     args = parser.parse_args()
     return args
@@ -27,9 +36,9 @@ def tax_ids():
     """
     :return:
     """
-    ncbi_ids = [9615, 10090, 9606, 9913, 9823]
-    regular = ['dog', 'mouse', 'human', 'cow', 'pig']
-    abbr = ['cfa', 'mmu', 'hsa', 'bta', 'ssc']
+    ncbi_ids = [9615, 10090, 9606, 9913, 9823, 9031]
+    regular = ['dog', 'mouse', 'human', 'cow', 'pig', 'chicken']
+    abbr = ['cfa', 'mmu', 'hsa', 'bta', 'ssc', 'gga']
     lookup = dict()
     for t, n, a in zip(ncbi_ids, regular, abbr):
         lookup[t] = {'name': n, 'code': a}
@@ -65,6 +74,7 @@ def merge_tables(genes, ogroups, mapping):
 
     merged = species_og.merge(species_map, on='og_id', how='outer')
     merged = merged.merge(species_genes, on='odb_gene_id', how='outer')
+    merged['clade_id'] = merged['og_id'].str.slice(start=0, stop=9)
     return merged
 
 
@@ -73,50 +83,84 @@ def raw_process_input(args):
     :param args:
     :return:
     """
-
-    gene_tab, og_tab, map_tab = None, None, None
+    genes_tab, og_tab, og2genes_tab = None, None, None
     for inpf in args.inputfiles:
         assert 'odb9' in inpf, 'Unexpected file: {}'.format(inpf)
         ttype = os.path.basename(inpf).split('.')[0].split('_')[1]
         if ttype == 'genes':
-            assert gene_tab is None, 'Duplicate gene: {}'.format(inpf)
-            gene_tab = pd.read_csv(inpf, delimiter='\t', header=None,
-                                   usecols=['odb_gene_id', 'tax_id', 'gene_name'],
-                                   names=odb_header(ttype), skip_blank_lines=True,
-                                   dtype={'tax_id': np.int32, 'gene_name': str, 'odb_gene_id': str})
+            assert genes_tab is None, 'Duplicate gene: {}'.format(inpf)
+            genes_tab = pd.read_csv(inpf, delimiter='\t', header=None,
+                                    usecols=['odb_gene_id', 'tax_id', 'gene_name'],
+                                    names=odb_header(ttype), skip_blank_lines=True,
+                                    dtype={'tax_id': np.int32, 'gene_name': str, 'odb_gene_id': str})
         elif ttype == 'OGs':
             assert og_tab is None, 'Duplicate OG table: {}'.format(inpf)
             og_tab = pd.read_csv(inpf, delimiter='\t', header=None,
                                  names=odb_header(ttype), skip_blank_lines=True,
                                  usecols=['og_id', 'og_name'], dtype={'og_id': str, 'og_name': str})
         elif ttype == 'OG2genes':
-            assert map_tab is None, 'Duplicate map table: {}'.format(inpf)
-            map_tab = pd.read_csv(inpf, delimiter='\t', header=None,
-                                  names=odb_header(ttype), skip_blank_lines=True,
-                                  dtype={'og_id': str, 'odb_gene_id': str})
+            assert og2genes_tab is None, 'Duplicate map table: {}'.format(inpf)
+            og2genes_tab = pd.read_csv(inpf, delimiter='\t', header=None,
+                                       names=odb_header(ttype), skip_blank_lines=True,
+                                       dtype={'og_id': str, 'odb_gene_id': str})
         else:
             raise ValueError('Unexpected table type: {}'.format(inpf))
-    merged = merge_tables(gene_tab, og_tab, map_tab)
+    merged = merge_tables(genes_tab, og_tab, og2genes_tab)
     return merged
 
 
-def read_subset(fpath):
+def read_gene_model(basedir, species):
     """
-    :param fpath:
+    :param basedir:
+    :param species:
     :return:
     """
-    def conv_strand(token):
-        replace = {'+': 1, '-': -1}
-        return replace[token]
+    abbr = SPECIES_MAP[species]
+    modelfiles = os.listdir(basedir)
+    modelfile = fnm.filter(modelfiles, '{}_*.genes.bed.gz'.format(abbr))
+    assert len(modelfile) == 1, 'No gene set identified: {} / {}'.format(species, abbr)
+    fpath = os.path.join(basedir, modelfile[0])
+    genes = pd.read_csv(fpath, skip_blank_lines=True, header=0,
+                        na_values='n/a', sep='\t', dtype=str,
+                        usecols=['#chrom', 'name', 'symbol'])
+    new_cols = []
+    for c in genes.columns:
+        if c == '#chrom':
+            new_cols.append('chrom')
+        else:
+            new_cols.append('{}_{}'.format(species, c))
+    genes.columns = new_cols
+    return genes
 
-    subset = pd.read_csv(fpath, delimiter='\t', header=0, skip_blank_lines=True,
-                         names=['chrom', 'start', 'end', 'gene_name', 'score', 'strand', 'symbol'],
-                         usecols=['chrom', 'start', 'end', 'gene_name', 'strand', 'symbol'],
-                         converters={'strand': conv_strand},
-                         dtype={'chrom': str, 'start': np.int32, 'end': np.int32,
-                                'strand': np.int8, 'symbol': str, 'name': str},
-                         na_values={'symbol': ['n/a']})
-    return subset
+
+def select_ortholog_pairs(dataset, a_genes, b_genes, a_name, b_name, locfilter):
+    """
+    :param dataset:
+    :param a_genes:
+    :param b_genes:
+    :param a_name:
+    :param b_name:
+    :param locfilter:
+    :return:
+    """
+    a_select = a_genes['chrom'].str.match(locfilter, as_indexer=True)
+    a_subset = a_genes.loc[a_select, '{}_name'.format(a_name)].unique()
+    print(a_subset.shape)
+    b_select = b_genes['chrom'].str.match(locfilter, as_indexer=True)
+    b_subset = b_genes.loc[b_select, '{}_name'.format(b_name)].unique()
+
+    a_idx = dataset['gene_name'].isin(a_subset)
+    b_idx = dataset['gene_name'].isin(b_subset)
+
+    a_data = dataset.loc[a_idx, ['clade_id', 'og_id', 'gene_name']]
+    print(a_data.shape)
+    grps = a_data.groupby('og_id').count()
+    print((grps['gene_name'] == 1).sum())
+    a_data.columns = ['clade_id', 'og_id', '{}_name'.format(a_name)]
+    b_data = dataset.loc[b_idx, ['clade_id', 'og_id', 'gene_name']]
+    b_data.columns = ['clade_id', 'og_id', '{}_name'.format(b_name)]
+
+    return 'foo'
 
 
 def reduce_to_subset(df, subsetpath):
@@ -237,30 +281,12 @@ def reduce_to_subset(df, subsetpath):
     return joined_subset
 
 
-def collect_subset_metadata(df):
-    """
-    :param df:
-    :return:
-    """
-    md = [['subset', 'protein_coding']]
-    if df['chrom'].isin(['chrX', 'chrY']).any():
-        md.append(['chromosomes', 'whole_genome'])
-    else:
-        md.append(['chromosomes', 'autosomes'])
-    species = df['species'].unique()
-    for s in species:
-        spec_sub = df.loc[df['species'] == s, 'gene_name']
-        spec_sub = spec_sub.unique()
-        md.append(['{}_genes'.format(s), str(spec_sub.size)])
-    mdf = pd.DataFrame(md, columns=['key', 'value'])
-    return mdf
-
-
 def main():
     """
     :return:
     """
     args = parse_command_line()
+    # create or load cached data
     if args.cache != 'no_cache':
         cache_dir = os.path.dirname(args.inputfiles[0])
         setattr(args, 'cache', os.path.join(cache_dir, args.cache))
@@ -268,36 +294,47 @@ def main():
         merged = raw_process_input(args)
     elif os.path.isfile(args.cache):
         with pd.HDFStore(args.cache, 'r') as hdf:
-            merged = hdf['raw']
+            merged = hdf['cache']
     else:
         merged = raw_process_input(args)
         with pd.HDFStore(args.cache, 'w', complib='blosc', complevel=9) as hdf:
-            hdf.put('raw', merged, format='table')
-    indexer = merged['gene_name'].notnull()
-    merged = merged.loc[indexer, :]
-    indexer = merged['og_id'].notnull()
-    raw_merged = merged.loc[indexer, :].copy()
-    with pd.HDFStore(args.outputfile, 'w', complib='blosc', complevel=9) as hdf:
-        hdf.put('/raw', raw_merged, format='table')
-    species = tax_ids()
-    shared_entries = set()
-    for k, vals in species.items():
-        this_species = raw_merged.loc[merged['tax_id'] == k, 'og_id']
-        if not shared_entries:
-            shared_entries = set(this_species.tolist())
-        else:
-            shared_entries = shared_entries.intersection(set(this_species.tolist()))
-    indexer = raw_merged['og_id'].isin(shared_entries)
-    shared_merged = raw_merged.loc[indexer, :].copy()
-    with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
-        hdf.put('/shared/raw', shared_merged, format='table')
-    subset = reduce_to_subset(shared_merged, args.subsets)
-    assert not subset.empty, 'Created empty subset of data'
-    with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
-        hdf.put('/shared/subset', subset, format='table')
-    md = collect_subset_metadata(subset)
-    with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
-        hdf.put('/metadata', md, format='table')
+            hdf.put('cache', merged, format='table')
+
+    for primary in ['human', 'mouse']:
+        prime_genes = read_gene_model(args.annotation, primary)
+        for secondary in SPECIES_MAP.keys():
+            if primary == secondary:
+                continue
+            sec_genes = read_gene_model(args.annotation, secondary)
+            pairs = select_ortholog_pairs(merged.copy(), prime_genes.copy(), sec_genes.copy(),
+                                          primary, secondary, 'chr[0-9XYZW]+$')
+            raise
+    #
+    # indexer = merged['gene_name'].notnull()
+    # merged = merged.loc[indexer, :]
+    # indexer = merged['og_id'].notnull()
+    # raw_merged = merged.loc[indexer, :].copy()
+    # with pd.HDFStore(args.outputfile, 'w', complib='blosc', complevel=9) as hdf:
+    #     hdf.put('/raw', raw_merged, format='table')
+    # species = tax_ids()
+    # shared_entries = set()
+    # for k, vals in species.items():
+    #     this_species = raw_merged.loc[merged['tax_id'] == k, 'og_id']
+    #     if not shared_entries:
+    #         shared_entries = set(this_species.tolist())
+    #     else:
+    #         shared_entries = shared_entries.intersection(set(this_species.tolist()))
+    # indexer = raw_merged['og_id'].isin(shared_entries)
+    # shared_merged = raw_merged.loc[indexer, :].copy()
+    # with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
+    #     hdf.put('/shared/raw', shared_merged, format='table')
+    # subset = reduce_to_subset(shared_merged, args.subsets)
+    # assert not subset.empty, 'Created empty subset of data'
+    # with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
+    #     hdf.put('/shared/subset', subset, format='table')
+    # md = collect_subset_metadata(subset)
+    # with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
+    #     hdf.put('/metadata', md, format='table')
     return
 
 
