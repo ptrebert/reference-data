@@ -29,7 +29,7 @@ def parse_command_line():
     parser.add_argument('--annotation', '-ann', type=str, dest='annotation')
     parser.add_argument('--output', '-o', type=str, dest='outputfile')
     parser.add_argument('--strategy', '-s', type=str, choices=['top-down', 'bottom-up'],
-                        dest='strategy')
+                        dest='strategy', default='bottom-up')
     args = parser.parse_args()
     return args
 
@@ -178,9 +178,8 @@ def select_ortholog_pairs(dataset, a_genes, b_genes, a_name, b_name, locfilter, 
             continue
         ogid_counts = subs.groupby('og_id').count()
         match_idx = ogid_counts[agname] == ogid_counts[bgname]
-        rem_ogids = ogid_counts.loc[~match_idx, :].index
-        remove_ogids.add(rem_ogids)
-        ogid_counts = ogid_counts.loc[, :]
+        rem_ogids = ogid_counts.loc[~match_idx, :].index.tolist()
+        remove_ogids.union(rem_ogids)
         check_ogids = ogid_counts.loc[match_idx, :].index.unique()
         for ogid in check_ogids:
             sub_sub = subs.loc[subs['og_id'] == ogid, :]
@@ -197,100 +196,80 @@ def select_ortholog_pairs(dataset, a_genes, b_genes, a_name, b_name, locfilter, 
                 remove_ogids.add(ogid)
                 continue
             select_ogids.add(ogid)
-            select_genes.add(sub_sub[agname])
-            select_genes.add(sub_sub[bgname])
+            select_genes = select_genes.union(sub_sub[agname].tolist())
+            select_genes = select_genes.union(sub_sub[bgname].tolist())
         merged = merged.loc[~merged['og_id'].isin(remove_ogids), :]
+        if merged.empty:
+            break
+    a_select_ogids = a_data['og_id'].isin(select_ogids)
+    a_select_genes = a_data[agname].isin(select_genes)
+    a_select_both = np.logical_and(a_select_ogids, a_select_genes)
+    a_data_select = a_data.loc[a_select_both, :]
+    a_data_select.columns = ['clade_id', 'og_id', agname]
+    a_data_select = a_data_select.merge(a_genes, on=agname, how='inner')
+    a_data_select.drop('chrom', axis=1, inplace=True)
+    asize = a_data_select[agname].size
+    auniq = a_data_select[agname].unique().size
+    assert asize == auniq,\
+        'A genes selected multiple times: {} vs {}'.format(auniq, asize)
+    b_select_ogids = b_data['og_id'].isin(select_ogids)
+    b_select_genes = b_data[bgname].isin(select_genes)
+    b_select_both = np.logical_and(b_select_ogids, b_select_genes)
+    b_data_select = b_data.loc[b_select_both, :]
+    b_data_select.columns = ['clade_id', 'og_id', bgname]
+    b_data_select = b_data_select.merge(b_genes, on=bgname, how='inner')
+    b_data_select.drop('chrom', axis=1, inplace=True)
+    bsize = b_data_select[bgname].size
+    buniq = b_data_select[bgname].unique().size
+    assert bsize == buniq,\
+        'B genes selected multiple times: {} vs {}'.format(buniq, bsize)
+    assert a_data_select.shape == b_data_select.shape, 'Cannot merge: {} vs {}'.format(a_data_select.shape, b_data_select.shape)
+    shared_select = a_data_select.merge(b_data_select, on=['og_id', 'clade_id'], copy=True)
+    symbol_cols = [c for c in shared_select.columns if c.endswith('symbol')]
+    shared_select = shared_select.sort_values(symbol_cols, axis=0, na_position='first')
+    return shared_select
 
-    # continue here: select og_ids from A and B, merge and return
 
-    return 'foo'
-
-
-def reduce_to_subset(df, subsetpath):
+def select_ortholog_groups(fpath, group_root):
     """
-    :param df:
-    :param subsetpath:
+    :param fpath:
+    :param group_root:
     :return:
     """
-    # what follows:
-    # the OrthoDB flat files seem not to have a clear info about the "hierarchy"
-    # among the clades, so this simple heuristic selects the maximal set of OG IDs
-    # that do not contain gene duplicates
+    if not group_root.startswith('/'):
+        group_root = '/' + group_root
+    groups = None
+    with pd.HDFStore(fpath, 'r') as hdf:
+        load_keys = [k for k in hdf.keys() if k.startswith(group_root)]
+        for k in load_keys:
+            if groups is None:
+                groups = hdf[k]
+            else:
+                groups = groups.merge(hdf[k], on=['og_id', 'clade_id'],
+                                      how='outer', suffixes=('', ''))
+    groups.dropna(axis=0, how='any', inplace=True)
+    groups.reset_index(drop=True, inplace=True)
+    return groups
 
-    # first 9 characters of OG ID are the clade ID
-    clade_ids = set(joined_subset['og_id'].str.slice(start=0, stop=9).unique())
-    # make a temp working copy of the dataset
-    clade_data = joined_subset.copy()
-    clade_counter = col.Counter()
-    for cid in clade_ids:
-        subs = clade_data.loc[clade_data['og_id'].str.startswith(cid), :]
-        clade_counter[cid] = subs.shape[0]
-    select_ogids = set()
-    remove_ogids = set()
-    selected_genes = set()
-    for cid, _ in reversed(clade_counter.most_common()):
-        subs = clade_data.loc[clade_data['og_id'].str.startswith(cid), :]
-        if subs.empty:
-            continue
-        for ogid in subs['og_id'].unique():
-            sub_spec = subs.loc[subs['og_id'] == ogid, 'species'].unique().tolist()
-            if len(sub_spec) != 5:
-                remove_ogids.add(ogid)
-                continue
-            sub_genes = subs.loc[subs['og_id'] == ogid, 'gene_name'].tolist()
-            if len(set(sub_genes)) != len(sub_genes):
-                # no clue what kind of ortholog group could contain the same
-                # gene twice or more - what is that? just discard...
-                remove_ogids.add(ogid)
-                continue
-            if any([g in selected_genes for g in sub_genes]):
-                remove_ogids.add(ogid)
-            else:
-                remove_ogids.add(ogid)
-                select_ogids.add(ogid)
-                selected_genes = selected_genes.union(set(sub_genes))
-        idx_remove = clade_data['og_id'].isin(remove_ogids)
-        clade_data = clade_data.loc[~idx_remove, :]
-        if clade_data.empty:
-            # this should happen automatically...
-            break
-    uniq_idx = joined_subset['og_id'].isin(select_ogids)
-    joined_subset = joined_subset.loc[uniq_idx, :]
-    # record info about group sizes
-    ogid_abund = col.Counter(joined_subset['og_id'])
-    group_size = []
-    group_bal = []
-    for ogid, count in ogid_abund.most_common():
-        group_size.append([ogid, count])
-        # check if the group is at least balanced
-        this_group = col.Counter(joined_subset.loc[joined_subset['og_id'] == ogid, 'species'])
-        median = np.median([n for i, n in this_group.most_common()])
-        balanced = True
-        for i, n in this_group.most_common():
-            if (median - 1) <= n <= (median + 1):
-                pass
-            else:
-                balanced = False
-                break
-        if balanced:
-            group_bal.append([ogid, 1])
-        else:
-            group_bal.append([ogid, 0])
-    group_size = pd.DataFrame(group_size, columns=['og_id', 'group_size'])
-    group_bal = pd.DataFrame(group_bal, columns=['og_id', 'group_balanced'])
-    joined_subset = joined_subset.merge(group_size, on='og_id', how='outer')
-    assert joined_subset['group_size'].notnull().all(), 'Failed'
-    joined_subset = joined_subset.merge(group_bal, on='og_id', how='outer')
-    assert joined_subset['group_balanced'].notnull().all(), 'Failed'
-    num_genes = joined_subset['gene_name'].size
-    uniq_genes = joined_subset['gene_name'].unique().size
-    assert num_genes == uniq_genes, 'Mismatch: {} vs {}'.format(num_genes, uniq_genes)
-    joined_subset = joined_subset.astype({'og_id': str, 'og_name': str, 'odb_gene_id': str,
-                                          'tax_id': np.int32, 'gene_name': str, 'chrom': str,
-                                          'start': np.int32, 'end': np.int32, 'strand': np.int8,
-                                          'symbol': str, 'species': str, 'group_size': np.int32,
-                                          'group_balanced': np.int8}, copy=True)
-    return joined_subset
+
+def dump_orthodb_data(dataset, species_a, species_b, group_root, outpath, mode):
+    """
+    :param dataset:
+    :param species_a:
+    :param species_b:
+    :param group_root:
+    :param outpath:
+    :param mode:
+    :return:
+    """
+    if species_a and species_b:
+        group = os.path.join(group_root, species_a, species_b)
+    else:
+        group = group_root
+    with pd.HDFStore(outpath, mode, complib='blosc', complevel=9) as hdf:
+        hdf.put(group, dataset, format='table')
+        hdf.flush()
+    return
 
 
 def main():
@@ -311,7 +290,8 @@ def main():
         merged = raw_process_input(args)
         with pd.HDFStore(args.cache, 'w', complib='blosc', complevel=9) as hdf:
             hdf.put('cache', merged, format='table')
-
+    with pd.HDFStore(args.output, 'w', complib='blosc', complevel=9) as hdf:
+        hdf.put('/raw', merged, format='table')
     for primary in ['human', 'mouse']:
         prime_genes = read_gene_model(args.annotation, primary)
         for secondary in SPECIES_MAP.keys():
@@ -319,34 +299,17 @@ def main():
                 continue
             sec_genes = read_gene_model(args.annotation, secondary)
             pairs = select_ortholog_pairs(merged.copy(), prime_genes.copy(), sec_genes.copy(),
-                                          primary, secondary, 'chr[0-9XYZW]+$')
-            raise
-    #
-    # indexer = merged['gene_name'].notnull()
-    # merged = merged.loc[indexer, :]
-    # indexer = merged['og_id'].notnull()
-    # raw_merged = merged.loc[indexer, :].copy()
-    # with pd.HDFStore(args.outputfile, 'w', complib='blosc', complevel=9) as hdf:
-    #     hdf.put('/raw', raw_merged, format='table')
-    # species = tax_ids()
-    # shared_entries = set()
-    # for k, vals in species.items():
-    #     this_species = raw_merged.loc[merged['tax_id'] == k, 'og_id']
-    #     if not shared_entries:
-    #         shared_entries = set(this_species.tolist())
-    #     else:
-    #         shared_entries = shared_entries.intersection(set(this_species.tolist()))
-    # indexer = raw_merged['og_id'].isin(shared_entries)
-    # shared_merged = raw_merged.loc[indexer, :].copy()
-    # with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
-    #     hdf.put('/shared/raw', shared_merged, format='table')
-    # subset = reduce_to_subset(shared_merged, args.subsets)
-    # assert not subset.empty, 'Created empty subset of data'
-    # with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
-    #     hdf.put('/shared/subset', subset, format='table')
-    # md = collect_subset_metadata(subset)
-    # with pd.HDFStore(args.outputfile, 'a', complib='blosc', complevel=9) as hdf:
-    #     hdf.put('/metadata', md, format='table')
+                                          primary, secondary, 'chr[0-9XYZW]+$', args.strategy)
+            dump_orthodb_data(pairs, primary, secondary, 'augo/pairs', args.output, 'a')
+            pairs = select_ortholog_pairs(merged.copy(), prime_genes.copy(), sec_genes.copy(),
+                                          primary, secondary, 'chr[0-9]+$', args.strategy)
+            dump_orthodb_data(pairs, primary, secondary, 'auto/pairs', args.output, 'a')
+
+    groups = select_ortholog_groups(args.output, 'auto/pairs')
+    dump_orthodb_data(groups, '', '', 'auto/groups', args.output, 'a')
+
+    groups = select_ortholog_groups(args.output, 'augo/pairs')
+    dump_orthodb_data(groups, '', '', 'augo/groups', args.output, 'a')
     return
 
 
