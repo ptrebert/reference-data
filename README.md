@@ -77,6 +77,7 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-03-03    http://www.orthodb.org/v9/download/odb9_OGs.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
 - 2017-03-03    http://www.orthodb.org/v9/download/odb9_OG2genes.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
 - 2017-03-03    http://www.orthodb.org/v9/download/odb9_OGs.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
+- 2017-04-07    http://hgdownload.soe.ucsc.edu/gbdb/hg19/bbi/wgEncodeCrgMapabilityAlign50mer.bw
 
 
 ## OrthoDB flat files
@@ -197,3 +198,22 @@ However, there seems not to be an overall good strategy as stated by Angie (UCSC
 > retains almost anything from blastz.  That's why we also have the
 > "net" tracks -- to keep the best chains and ignore most of the
 > "fluff".
+
+## UCSC / CRG alignability files
+
+### Alignability
+
+These tracks provide a measure of how often the sequence found at the particular location
+will align within the whole genome. Unlike measures of uniqueness, alignability will
+tolerate up to 2 mismatches. These tracks are in the form of signals ranging from 0 to 1 and
+have several configuration options.
+
+### Alignability
+
+The CRG Alignability tracks display how uniquely k-mer sequences align to a region of the genome.
+To generate the data, the GEM-mappability program has been employed. The method is equivalent to
+mapping sliding windows of k-mers (where k has been set to 36, 40, 50, 75 or 100 nts to produce these tracks)
+back to the genome using the GEM mapper aligner (up to 2 mismatches were allowed in this case).
+For each window, a mappability score was computed (S = 1/(number of matches found in the genome):
+**S=1 means one match in the genome**, **S=0.5 is two matches in the genome**, and so on).
+The CRG Alignability tracks were generated independently of the ENCODE project, in the framework of the GEM (GEnome Multitool) project.
