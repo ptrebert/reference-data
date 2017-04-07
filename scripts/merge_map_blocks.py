@@ -19,8 +19,10 @@ def parse_command_line():
     parser.add_argument('--target', '-t', type=str, dest='target')
     parser.add_argument('--query', '-q', type=str, dest='query')
     parser.add_argument('--output', '-o', type=str, dest='output')
-    parser.add_argument('--switch', '-s', action='store_true', default=False,
-                        help='Switch target and query in the output', dest='switch')
+    parser.add_argument('--switch', '-s', action='store_true', default=False, dest='switch',
+                        help='Switch target and query in the output')
+    parser.add_argument('--filter', '-f', type=int, dest='filter', default=0,
+                        help='Skip blocks smaller than this size. Default: 0')
     args = parser.parse_args()
     return args
 
@@ -31,6 +33,11 @@ def join_parts(switch, *args):
     :param args: tc, ts, te, tstr, bc, qc, qs, qe, qstr
     :return:
     """
+    # had an annoying bug here - passed "(switch,)" instead of "switch"
+    # which always evaluated to True; but did not affect the one file
+    # where I used switch, so maybe introduced the error later...?
+    # anyway, just to be sure here, some manual type checking...
+    assert isinstance(bool, switch), 'Received wrong type for switch: {}'.format(switch)
     if switch:
         items = op.itemgetter(*(5, 6, 7, 3,  # the new target / original query region
                                 4,  # block ID
@@ -52,7 +59,7 @@ def main():
     bufsize = 0
     block_count = 0
     block_ids = set()
-    build_block = fnt.partial(join_parts, (args.switch, ))
+    build_block = fnt.partial(join_parts, *(args.switch, ))
     with open(args.target, 'r') as trgfile:
         with open(args.query, 'r') as qryfile:
             while 1:
@@ -75,6 +82,8 @@ def main():
                         'Coverage mismatch for files {} and {}\nLines {} and {}'.format(os.path.basename(args.target),
                                                                                         os.path.basename(args.query),
                                                                                         tb, qb)
+                    if tl < args.filter:
+                        continue
                     block_count += 1
                     qstrand = qid.split('_')[-1]
                     #blockline = '\t'.join([tc, ts, te, '+', str(block_count),
@@ -87,13 +96,15 @@ def main():
                     if bufsize > 100000:
                         with gz.open(args.output, 'at') as outfile:
                             _ = outfile.write(outbuffer.getvalue())
+                            outfile.flush()
                         outbuffer = io.StringIO()
                         bufsize = 0
                 except ValueError:
                     break
     with gz.open(args.output, 'at') as outfile:
         _ = outfile.write(outbuffer.getvalue())
-
+        # head a corrupted gzip once - not sure about the cause... I/O interrupted???
+        outfile.flush()
     return
 
 
