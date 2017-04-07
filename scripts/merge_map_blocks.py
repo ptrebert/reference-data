@@ -37,7 +37,7 @@ def join_parts(switch, *args):
     # which always evaluated to True; but did not affect the one file
     # where I used switch, so maybe introduced the error later...?
     # anyway, just to be sure here, some manual type checking...
-    assert isinstance(bool, switch), 'Received wrong type for switch: {}'.format(switch)
+    assert isinstance(switch, bool), 'Received wrong type for switch: {}'.format(switch)
     if switch:
         items = op.itemgetter(*(5, 6, 7, 3,  # the new target / original query region
                                 4,  # block ID
