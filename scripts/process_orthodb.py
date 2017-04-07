@@ -290,7 +290,7 @@ def main():
         merged = raw_process_input(args)
         with pd.HDFStore(args.cache, 'w', complib='blosc', complevel=9) as hdf:
             hdf.put('cache', merged, format='table')
-    with pd.HDFStore(args.output, 'w', complib='blosc', complevel=9) as hdf:
+    with pd.HDFStore(args.outputfile, 'w', complib='blosc', complevel=9) as hdf:
         hdf.put('/raw', merged, format='table')
     for primary in ['human', 'mouse']:
         prime_genes = read_gene_model(args.annotation, primary)
@@ -300,16 +300,16 @@ def main():
             sec_genes = read_gene_model(args.annotation, secondary)
             pairs = select_ortholog_pairs(merged.copy(), prime_genes.copy(), sec_genes.copy(),
                                           primary, secondary, 'chr[0-9XYZW]+$', args.strategy)
-            dump_orthodb_data(pairs, primary, secondary, 'augo/pairs', args.output, 'a')
+            dump_orthodb_data(pairs, primary, secondary, 'augo/pairs', args.outputfile, 'a')
             pairs = select_ortholog_pairs(merged.copy(), prime_genes.copy(), sec_genes.copy(),
                                           primary, secondary, 'chr[0-9]+$', args.strategy)
-            dump_orthodb_data(pairs, primary, secondary, 'auto/pairs', args.output, 'a')
+            dump_orthodb_data(pairs, primary, secondary, 'auto/pairs', args.outputfile, 'a')
 
-    groups = select_ortholog_groups(args.output, 'auto/pairs')
-    dump_orthodb_data(groups, '', '', 'auto/groups', args.output, 'a')
+    groups = select_ortholog_groups(args.outputfile, 'auto/pairs')
+    dump_orthodb_data(groups, '', '', 'auto/groups', args.outputfile, 'a')
 
-    groups = select_ortholog_groups(args.output, 'augo/pairs')
-    dump_orthodb_data(groups, '', '', 'augo/groups', args.output, 'a')
+    groups = select_ortholog_groups(args.outputfile, 'augo/pairs')
+    dump_orthodb_data(groups, '', '', 'augo/groups', args.outputfile, 'a')
     return
 
 
