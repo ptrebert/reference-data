@@ -245,7 +245,8 @@ def select_ortholog_groups(fpath, group_root):
             if groups is None:
                 groups = hdf[k]
             else:
-                groups = groups.merge(hdf[k], on=['og_id', 'clade_id'],
+                shared_cols = set(groups.columns).intersection(hdf[k].columns)
+                groups = groups.merge(hdf[k], on=list(shared_cols),
                                       how='outer', suffixes=('', ''))
     groups.dropna(axis=0, how='any', inplace=True)
     groups.reset_index(drop=True, inplace=True)
