@@ -34,6 +34,28 @@ def parse_command_line():
     return args
 
 
+def check_special_chroms(name):
+    """
+    :param name:
+    :return:
+    """
+    # check for chimp exceptions
+    if name in ['chr2A', '2A', '2a', 'chr2a']:
+        return 21
+    elif name in ['chr2B', '2B', '2b', 'chr2b']:
+        return 22
+    elif name in ['chrX', 'X', 'chrZ', 'Z']:
+        return 1000
+    elif name in ['chrY', 'Y', 'chrW', 'W']:
+        return 2000
+    elif name in ['chrM', 'M', 'chrMT', 'MT']:
+        return 3000
+    elif name in ['hs37d5']:
+        return 4000
+    else:
+        return -1
+
+
 def chrom_karyo_sort(chroms):
     """
     :param chroms:
@@ -46,11 +68,9 @@ def chrom_karyo_sort(chroms):
             ord = int(cname.lower().strip('chr'))
             ordered.append((cname, size, ord * 10))
         except ValueError:
-            # check for chimp exceptions
-            if cname.lower() == '2a':
-                ordered.append((cname, size, 21))
-            elif cname.lower() == '2b':
-                ordered.append((cname, size, 22))
+            ord = check_special_chroms(cname)
+            if ord > 0:
+                ordered.append((cname, size, ord))
             else:
                 unordered.append((cname, size, -1))
     unordered = sorted(unordered, key=lambda x: x[1], reverse=True)
@@ -99,7 +119,7 @@ def output_chromosome_sizes(args):
     if args.sortorder == 'size':
         tsv_out = sorted(out, key=lambda x: x[1], reverse=True)
     else:
-        tsv_out = sorted(out, key=chrom_karyo_sort)
+        tsv_out = chrom_karyo_sort(out)
     tsv_out = [(x[0], str(x[1])) for x in tsv_out]
     bed_out = [(x[0], '0', str(x[1])) for x in tsv_out]
     _ = write_chrom_sizes(tsv_out, args.tsv, assm)
