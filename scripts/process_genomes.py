@@ -27,9 +27,36 @@ def parse_command_line():
     comgroup.add_argument('--tsv-format', '-tsv', type=str, default='', dest='tsv')
     comgroup.add_argument('--bed-format', '-bed', type=str, default='', dest='bed')
     comgroup.add_argument('--select', '-s', type=str, default='"[a-zA-Z0-9\._]+"', dest='select')
+    comgroup.add_argument('--sort-order', '-so', type=str, choices=['karyo', 'size'], default='karyo',
+                          dest='sortorder', help='Sort by karyotype: natural name sort of chromosomes')
 
     args = parser.parse_args()
     return args
+
+
+def chrom_karyo_sort(chroms):
+    """
+    :param chroms:
+    :return:
+    """
+    ordered = []
+    unordered = []
+    for cname, size in chroms:
+        try:
+            ord = int(cname.lower().strip('chr'))
+            ordered.append((cname, size, ord * 10))
+        except ValueError:
+            # check for chimp exceptions
+            if cname.lower() == '2a':
+                ordered.append((cname, size, 21))
+            elif cname.lower() == '2b':
+                ordered.append((cname, size, 22))
+            else:
+                unordered.append((cname, size, -1))
+    unordered = sorted(unordered, key=lambda x: x[1], reverse=True)
+    ordered = sorted(ordered, key=lambda x: x[2])
+    ordered.extend(unordered)
+    return [(t[0], t[1]) for t in ordered]
 
 
 def write_chrom_sizes(data, path, assm):
@@ -69,7 +96,10 @@ def output_chromosome_sizes(args):
     for chrom, size in genome.sequence_sizes().items():
         if selector.match(chrom) is not None:
             out.append((chrom, size))
-    tsv_out = sorted(out, key=lambda x: x[1], reverse=True)
+    if args.sortorder == 'size':
+        tsv_out = sorted(out, key=lambda x: x[1], reverse=True)
+    else:
+        tsv_out = sorted(out, key=chrom_karyo_sort)
     tsv_out = [(x[0], str(x[1])) for x in tsv_out]
     bed_out = [(x[0], '0', str(x[1])) for x in tsv_out]
     _ = write_chrom_sizes(tsv_out, args.tsv, assm)
