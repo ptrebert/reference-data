@@ -38,7 +38,10 @@ def build_chain_filter_commands(chainfiles, chromref, outpath, cmd, jobcall):
     :param jobcall:
     :return:
     """
-    chrom_select = make_chromosome_string(chromref)
+    try:
+        chrom_select = make_chromosome_string(chromref)
+    except AssertionError:
+        return []
     params = []
     for chf in chainfiles:
         fp, fn = os.path.split(chf)
