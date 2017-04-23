@@ -227,6 +227,21 @@ def select_ortholog_pairs(dataset, a_genes, b_genes, a_name, b_name, locfilter, 
     shared_select = a_data_select.merge(b_data_select, on=['og_id', 'clade_id'], copy=True)
     symbol_cols = [c for c in shared_select.columns if c.endswith('symbol')]
     shared_select = shared_select.sort_values(symbol_cols, axis=0, na_position='first')
+    # extend OG ids with species
+    # why this?
+    # OrthoDB OG IDs are not stable between species pairs,
+    # apparently they depend on the relation between the two.
+    # Hence, merging on OG IDs leads to a ridiculously small
+    # dataset for all 6 species. Augment OG IDs with species
+    # information and merge on gene names/symbols only
+    # (see: select_ortholog_groups)
+    ogids = shared_select['og_id'].tolist()
+    ogids = [item + '_' + a_name + '_' + b_name for item in ogids]
+    shared_select['og_id_{}_{}'.format(a_name, b_name)] = ogids
+    cladeids = shared_select['clade_id'].tolist()
+    cladeids = [item + '_' + a_name + '_' + b_name for item in cladeids]
+    shared_select['clade_id_{}_{}'.format(a_name, b_name)] = cladeids
+    shared_select.drop(['og_id', 'clade_id'], axis=1, inplace=True)
     return shared_select
 
 

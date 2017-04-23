@@ -521,20 +521,26 @@ def build_pipeline(args, config, sci_obj):
                              extras=[cmd, jobcall])
     proc_hcop = proc_hcop.mkdir(ortho_hdf_out)
 
-    # sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
-    # if args.gridmode:
-    #     jobcall = sci_obj.ruffus_gridjob()
-    # else:
-    #     jobcall = sci_obj.ruffus_localjob()
-    #
-    # cmd = config.get('Pipeline', 'orthodb_conv').replace('\n', ' ')
-    # orthodb_conv = pipe.merge(task_func=sci_obj.get_jobf('ins_out'),
-    #                           name='orthodb_conv',
-    #                           input=output_from(orthodb_init),
-    #                           output=os.path.join(ortho_hdf_out, 'orthoDB_2015-v9_5vert.h5'),
-    #                           extras=[cmd, jobcall]).mkdir(ortho_hdf_out)
-    # orthodb_conv = orthodb_conv.mkdir(ortho_hdf_out)
-    # orthodb_conv = orthodb_conv.follows(run_task_genemodel)
+    sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'proc_orthodb').replace('\n', ' ')
+    proc_orthodb = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
+                                name='proc_orthodb',
+                                input=output_from(ortho_init),
+                                filter=formatter('(?P<SOURCE>odb9)_\w+\.tab\.gz$'),
+                                output=os.path.join(ortho_hdf_out, '{SOURCE[0]}_6species.h5'),
+                                extras=[cmd, jobcall])
+    proc_orthodb = proc_orthodb.mkdir(ortho_hdf_out)
+    proc_orthodb = proc_orthodb.follows(run_task_genemodel)
+
+    run_task_orthologs = pipe.merge(task_func=touch_checkfile,
+                                    name='task_orthologs',
+                                    input=output_from(proc_hcop, proc_orthodb),
+                                    output=os.path.join(dir_task_orthologs, 'run_task_orthologs.chk'))
 
     #
     # End of major task: orthologs
@@ -914,141 +920,6 @@ def build_pipeline(args, config, sci_obj):
                                                    merge_blocks, switch_blocks, mapidx),
                                  output=os.path.join(dir_task_chainfiles, 'run_task_chainfiles.chk'))
 
-    # # cmd = config.get('Pipeline', 'rbestnet').replace('\n', ' ')
-    # # chf_rbest_filt_net = os.path.join(dir_task_chainfiles, 'rbest_filt_net')
-    # # rbestnet = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    # #                           name='rbestnet',
-    # #                           input=output_from(rbestfilt),
-    # #                           filter=formatter(rbest_re),
-    # #                           output=os.path.join(chf_rbest_filt_net, '{TARGET[0]}_to_{QUERY[0]}.rbest.net'),
-    # #                           extras=[cmd, jobcall]).mkdir(chf_rbest_filt_net)
-    # #
-    # # cmd = config.get('Pipeline', 'rbestbed').replace('\n', ' ')
-    # # chf_rbest_filt_bed = os.path.join(dir_task_chainfiles, 'rbest_filt_bed')
-    # # rbestbed = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    # #                           name='rbestbed',
-    # #                           input=output_from(rbestnet),
-    # #                           filter=formatter(rbest_re),
-    # #                           output=os.path.join(chf_rbest_filt_bed, '{TARGET[0]}_to_{QUERY[0]}.net.bed.gz'),
-    # #                           extras=[cmd, jobcall]).mkdir(chf_rbest_filt_bed)
-    # #
-    # # chf_rbest_trgmap = os.path.join(dir_task_chainfiles, 'trg_to_map')
-    # # trgtomap = pipe.transform(task_func=filter_rbest_net,
-    # #                           name='trgtomap',
-    # #                           input=output_from(rbestbed),
-    # #                           filter=suffix('.net.bed.gz'),
-    # #                           output='.map.bed.gz',
-    # #                           output_dir=chf_rbest_trgmap).mkdir(chf_rbest_trgmap).jobs_limit(4)
-    #
-
-    #
-    # cmd = config.get('Pipeline', 'trgbnet')
-    # trgbnet = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                          name='trgbnet',
-    #                          input=output_from(trgbchain),
-    #                          filter=formatter(chain_re),
-    #                          output=os.path.join(chf_rbest_net, '{TARGET[0]}_to_{QUERY[0]}.rbest.net.gz'),
-    #                          extras=[cmd, jobcall]).mkdir(chf_rbest_net)
-    #
-    # cmd = config.get('Pipeline', 'bednet')
-    # chf_rbest_bed = os.path.join(dir_task_chainfiles, 'rbest_bed')
-    # chf_bednet = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                             name='chf_bednet',
-    #                             input=output_from(trgbnet, qrybnet),
-    #                             filter=suffix('.rbest.net.gz'),
-    #                             output='.rbest.bed.gz',
-    #                             output_dir=chf_rbest_bed,
-    #                             extras=[cmd, jobcall]).mkdir(chf_rbest_bed)
-    #
-    # cmd = config.get('Pipeline', 'qrysymm')
-    # symmfilt_chains = os.path.join(dir_task_chainfiles, 'rbest_symm')
-    # qrysymm = pipe.files(sci_obj.get_jobf('in_out'),
-    #                      build_symm_filter_commands(collect_full_paths(chf_rbest_chain, '*.chain.gz'),
-    #                                                 dir_out_chromauto, symmfilt_chains, cmd, jobcall),
-    #                      name='qrysymm').mkdir(symmfilt_chains)
-    #
-    # cmd = config.get('Pipeline', 'mrgblocks')
-    # mrgblocks = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
-    #                          name='mrgblocks',
-    #                          input=output_from(qrysymm),
-    #                          filter=formatter('(?P<MAPPING>\w+)\.(?P<CHROM>\w+)\.symmap\.tsv\.gz'),
-    #                          output=os.path.join(symmfilt_chains, '{MAPPING[0]}.wg.symmap.tsv.gz'),
-    #                          extras=[cmd, jobcall])
-    #
-    # cmd = config.get('Pipeline', 'normblocks')
-    # normblocks_dir = os.path.join(dir_task_chainfiles, 'rbest_norm')
-    # normblocks = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                             name='normblocks',
-    #                             input=output_from(mrgblocks),
-    #                             filter=suffix('wg.symmap.tsv.gz'),
-    #                             output='norm.symmmap.tsv.gz',  # there are too many M's in here...
-    #                             output_dir=normblocks_dir,
-    #                             extras=[cmd, jobcall]).mkdir(normblocks_dir)
-    #
-    # # dump target blocks for mapping with CrossMap
-    # # select only hg19/mm9 to all others
-    # trg_re = '(?P<TRG>(hg19|mm9))_to_(?P<QRY>(mm9|canFam3|bosTau7|susScr2))\.norm\.symmmap\.tsv\.gz'
-    # cmd = config.get('Pipeline', 'dumptrg')
-    # dir_dumptrg = os.path.join(dir_task_chainfiles, 'trg_to_map')
-    # dumptrg = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                          name='dumptrg',
-    #                          input=output_from(normblocks),
-    #                          filter=formatter(trg_re),
-    #                          output=os.path.join(dir_dumptrg, '{TRG[0]}_to_{QRY[0]}.blocks.bed'),
-    #                          extras=[cmd, jobcall]).mkdir(dir_dumptrg)
-
-    # # the following task is a sanity check only
-    # # dump the generated blocks to BED-like format and
-    # # run liftOver to see how close the output is
-    # cmd = config.get('Pipeline', 'dumptrg')
-    # liftover_dir = os.path.join(dir_task_chainfiles, 'liftover_test')
-    # dumptrg = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                          name='dumptrg',
-    #                          input=output_from(normblocks),
-    #                          filter=formatter('(?P<TRG>hg19)_to_(?P<QRY>mm9)\.norm\.symmmap\.tsv\.gz'),
-    #                          output=os.path.join(liftover_dir, '{TRG[0]}_to_{QRY[0]}.blocks.bed'),
-    #                          extras=[cmd, jobcall]).mkdir(liftover_dir)
-    #
-    # cmd = config.get('Pipeline', 'dumpqry')
-    # dumpqry = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                          name='dumpqry',
-    #                          input=output_from(normblocks),
-    #                          filter=formatter('(?P<TRG>hg19)_to_(?P<QRY>mm9)\.norm\.symmmap\.tsv\.gz'),
-    #                          output=os.path.join(liftover_dir, '{QRY[0]}_from_{TRG[0]}.blocks.bed'),
-    #                          extras=[cmd, jobcall]).mkdir(liftover_dir)
-    #
-    # cmd = config.get('Pipeline', 'liftover').replace('\n', ' ')
-    # liftover = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                           name='liftover',
-    #                           input=output_from(dumptrg),
-    #                           filter=formatter('(?P<BLOCKS>hg19_to_mm9).blocks.bed'),
-    #                           output=os.path.join(liftover_dir, '{BLOCKS[0]}.lifted.bed'),
-    #                           extras=[cmd, jobcall]).mkdir(liftover_dir)
-    #
-    # blockfiles = [os.path.join(liftover_dir, fn) for fn in ['hg19_to_mm9.lifted.bed',
-    #                                                         'mm9_from_hg19.blocks.bed']]
-    #
-    # cmd = config.get('Pipeline', 'sortblocks')
-    # sortblocks = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-    #                             name='sortblocks',
-    #                             input=blockfiles,
-    #                             filter=suffix('.bed'),
-    #                             output='.sort.bed',
-    #                             output_dir=liftover_dir,
-    #                             extras=[cmd, jobcall])
-    # sortblocks = sortblocks.active_if(os.path.isfile(blockfiles[0]))
-    #
-    # checkblocks = pipe.merge(task_func=check_lifted_blocks,
-    #                          name='checkblocks',
-    #                          input=output_from(sortblocks),
-    #                          output=os.path.join(liftover_dir, 'lift_block_stats.json'))
-
-    # sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
-    # if args.gridmode:
-    #     jobcall = sci_obj.ruffus_gridjob()
-    # else:
-    #     jobcall = sci_obj.ruffus_localjob()
-
     #
     # End of major task: chain files
     # ================================
@@ -1314,6 +1185,149 @@ def build_pipeline(args, config, sci_obj):
     #
     # End of project Sarvesh
     # ======================
+
+    # ======================
+    # Pairwise alignment information
+    # between human (hg19) and mouse (mm10)
+    # including gonosomes for DEEP
+
+    dir_project_deep = os.path.join(workdir, 'projects', 'deep')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    deep_chainfile = os.path.join(workdir, 'chainfiles', 'rawdata', 'hg19ToMm10.over.chain.gz')
+
+    deep_aln_init = pipe.originate(task_func=lambda x: x,
+                                   name='deep_aln_init',
+                                   output=[deep_chainfile])
+
+    deep_prefiltchain_dir = os.path.join(dir_project_deep, 'temp', 'prefilter')
+    cmd = config.get('Pipeline', 'deep_chfprefilt').replace('\n', ' ')
+    deep_chainfilter_params = build_chain_filter_commands([deep_chainfile], dir_out_chromaugo,
+                                                          deep_prefiltchain_dir, cmd, jobcall)
+    deep_prefilter_chain = pipe.files(sci_obj.get_jobf('in_out'),
+                                      deep_chainfilter_params,
+                                      name='deep_prefilter_chain')
+    deep_prefilter_chain = deep_prefilter_chain.mkdir(deep_prefiltchain_dir)
+    deep_prefilter_chain = deep_prefilter_chain.follows(deep_aln_init)
+
+    chain_re = '(?P<TARGET>\w+)_to_(?P<QUERY>\w+)(?P<EXT>\.[\w\.]+)'
+
+    cmd = config.get('Pipeline', 'chfswap')
+    deep_swap_dir = os.path.join(dir_project_deep, 'temp', 'swap')
+    deep_chf_swap = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                   name='deep_chf_swap',
+                                   input=output_from(deep_prefilter_chain),
+                                   filter=formatter(chain_re),
+                                   output=os.path.join(deep_swap_dir, '{QUERY[0]}_to_{TARGET[0]}.tbest.chain.gz'),
+                                   extras=[cmd, jobcall])
+    deep_chf_swap = deep_chf_swap.mkdir(deep_swap_dir)
+
+    cmd = config.get('Pipeline', 'deep_qrybnet')
+    deep_rbestnet_dir = os.path.join(dir_project_deep, 'temp', 'rbest_net')
+    deep_qrybnet = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='deep_qrybnet',
+                                  input=output_from(deep_chf_swap),
+                                  filter=formatter(chain_re),
+                                  output=os.path.join(deep_rbestnet_dir, '{TARGET[0]}_to_{QUERY[0]}.rbest.net.gz'),
+                                  extras=[cmd, jobcall])
+    deep_qrybnet = deep_qrybnet.mkdir(deep_rbestnet_dir)
+
+    cmd = config.get('Pipeline', 'deep_qrybchain')
+    deep_rbestchain_dir = os.path.join(dir_project_deep, 'temp', 'rbest_chain')
+    deep_qrybchain = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='deep_qrybchain',
+                                    input=output_from(deep_qrybnet),
+                                    filter=formatter(chain_re),
+                                    output=os.path.join(deep_rbestchain_dir, '{TARGET[0]}_to_{QUERY[0]}.rbest.chain.gz'),
+                                    extras=[cmd, jobcall])
+    deep_qrybchain = deep_qrybchain.mkdir(deep_rbestchain_dir)
+
+    cmd = config.get('Pipeline', 'trgbchain')
+    deep_trgbchain = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='deep_trgbchain',
+                                    input=output_from(deep_qrybchain),
+                                    filter=formatter(chain_re),
+                                    output=os.path.join(deep_rbestchain_dir, '{QUERY[0]}_to_{TARGET[0]}.rbest.chain.gz'),
+                                    extras=[cmd, jobcall])
+    deep_trgbchain = deep_trgbchain.mkdir(deep_rbestchain_dir)
+
+    cmd = config.get('Pipeline', 'deep_trgbfilt').replace('\n', ' ')
+    deep_rbestfilter_dir = os.path.join(dir_project_deep, 'temp', 'rbest_chain_filt')
+    deep_trgbfilt = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                   name='deep_trgbfilt',
+                                   input=output_from(deep_trgbchain),
+                                   filter=formatter(chain_re),
+                                   output=os.path.join(deep_rbestfilter_dir, '{TARGET[0]}_to_{QUERY[0]}.rbest.chain.filt.gz'),
+                                   extras=[cmd, jobcall])
+    deep_trgbfilt = deep_trgbfilt.mkdir(deep_rbestfilter_dir)
+
+    cmd = config.get('Pipeline', 'trgbbed').replace('\n', ' ')
+    deep_rbestbed_dir = os.path.join(dir_project_deep, 'rbest_chain_bed')
+    deep_trgbbed = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='deep_trgbbed',
+                                  input=output_from(deep_trgbfilt),
+                                  filter=formatter(chain_re),
+                                  output=os.path.join(deep_rbestbed_dir, '{TARGET[0]}_to_{QUERY[0]}.rbest.bed'),
+                                  extras=[cmd, jobcall])
+    deep_trgbbed = deep_trgbbed.mkdir(deep_rbestbed_dir)
+
+    sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('CrossmapEnv')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'deep_crossmap').replace('\n', ' ')
+    deep_crossmap = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                   name='deep_crossmap',
+                                   input=output_from(deep_trgbbed),
+                                   filter=formatter(chain_re),
+                                   output=os.path.join(deep_rbestbed_dir, '{TARGET[0]}_to_{QUERY[0]}.mapped.bed'),
+                                   extras=[cmd, jobcall])
+
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'deep_mrgblocks').replace('\n', ' ')
+    deep_pwaln_dir = os.path.join(dir_project_deep, 'aln')
+    deep_mrgblocks = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='deep_mrgblocks',
+                                    input=output_from(deep_crossmap),
+                                    filter=formatter(chain_re),
+                                    output=os.path.join(deep_pwaln_dir, '{TARGET[0]}_to_{QUERY[0]}.aln.tsv.gz'),
+                                    extras=[cmd, jobcall])
+    deep_mrgblocks = deep_mrgblocks.mkdir(deep_pwaln_dir)
+
+    cmd = config.get('Pipeline', 'deep_trgbed').replace('\n', ' ')
+    deep_trgbed_dir = os.path.join(dir_project_deep, 'temp', 'alnbed')
+    deep_trgbed = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='deep_trgbed',
+                                 input=output_from(deep_mrgblocks),
+                                 filter=suffix('aln.tsv.gz'),
+                                 output='hg19.bed.gz',
+                                 output_dir=deep_trgbed_dir,
+                                 extras=[cmd, jobcall])
+    deep_trgbed = deep_trgbed.mkdir(deep_trgbed_dir)
+
+    cmd = config.get('Pipeline', 'deep_mapaln').replace('\n', ' ')
+    deep_mapaln = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='deep_mapaln',
+                                 input=output_from(deep_trgbed),
+                                 filter=formatter(chain_re),
+                                 output=os.path.join(deep_trgbed_dir, '{TARGET[0]}_to_{QUERY[0]}.map.bed.gz'),
+                                 extras=[cmd, jobcall])
+
+    #
+    # End of: alignment hg19 - mm10
+    # ======================
+
 
     dir_projects = os.path.join(workdir, 'projects')
     run_projects = pipe.merge(task_func=touch_checkfile,
