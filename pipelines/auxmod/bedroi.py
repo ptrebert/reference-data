@@ -57,6 +57,9 @@ def make_bed_roi(inputfile, outputfile, chromfile, regtype):
         for line in infile:
             region = dec(line).split()
             start, end = adjust(int(region[1]), int(region[2]), region[5])
+            assert start >= 0, 'Invalid start coordinate: {}'.format(start)
+            assert end > 0, 'Invalid end coordinate: {}'.format(end)
+            assert start < end, 'Invalid start - end: {} - {}'.format(start, end)
             try:
                 _ = check_bounds(region[0], start, end, chrom_bounds, inputfile)
             except AssertionError:

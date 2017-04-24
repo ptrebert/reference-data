@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # coding=utf-8
 
+import os as os
 import csv as csv
 import gzip as gz
 import sys as sys
@@ -49,8 +50,69 @@ def parse_command_line():
                         help='From GENCODE: "member of the consensus CDS gene set, '
                              'confirming coding regions between ENSEMBL, UCSC, NCBI and HAVANA."')
     parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9XYZW][0-9AB]?$", dest='chrom')
+    parser.add_argument('--boundary', '-bo', type=int, default=5000, dest='boundary')
+    parser.add_argument('--chrom-sizes', '-csz', type=str, dest='chromsizes', required=True)
     args = parser.parse_args()
     return args
+
+
+def make_chrom_bounds(cfile):
+    """
+    :param cfile:
+    :return:
+    """
+    boundaries = dict()
+    with open(cfile, 'r') as infile:
+        for line in infile:
+            if not line.strip():
+                continue
+            name, size = line.strip().split()
+            boundaries[name] = {'start': 0, 'end': int(size)}
+    return boundaries
+
+
+def read_chrom_sizes(inputfile, chromsizes):
+    """
+    :param inputfile:
+    :param chromsizes:
+    :return:
+    """
+    if os.path.isfile(chromsizes):
+        chrom_bounds = make_chrom_bounds(chromsizes)
+    elif os.path.isdir(chromsizes):
+        all_files = os.listdir(chromsizes)
+        assm = os.path.basename(inputfile).split('_')[1]
+        cfile = [f for f in all_files if f.startswith(assm) and f.endswith('.tsv')]
+        assert len(cfile) == 1, 'Could not identify chromosome size file: {} in {}'.format(assm, all_files)
+        cfile = os.path.join(chromsizes, cfile[0])
+        chrom_bounds = make_chrom_bounds(cfile)
+    else:
+        raise ValueError('Cannot interpret value for chrom sizes: {}'.format(chromsizes))
+    return chrom_bounds
+
+
+def check_chrom_bounds(gene, slack, bounds):
+    """
+    :param gene:
+    :param slack:
+    :param bounds:
+    :return:
+    """
+    s, e = int(gene[1]), int(gene[2])
+    assert s >= 0, 'Gene start invalid: {}'.format(s)
+    assert e > 0, 'Gene end invalid: {}'.format(e)
+    if gene[5] == '+':
+        if bounds['start'] + slack <= s < e <= bounds['end']:
+            return True
+        else:
+            return False
+    elif gene[5] == '-':
+        if s < e + slack <= bounds['end']:
+            return True
+        else:
+            return False
+    else:
+        raise ValueError('Expected strand information at index 5: {}'.format(gene))
 
 
 def subset_selector(intype):
@@ -152,6 +214,7 @@ def select_protein_coding_subset(args):
     exon_columns = exon_column_selector(args.inputtype)
     nonna_values = non_na_selector(args.inputtype)
     subset = subset_value_selector(args.inputtype, args.subset)
+    chrom_bounds = read_chrom_sizes(args.input, args.chromsizes)
     genes = []
     transcripts = []
     use_genes = set()
@@ -159,6 +222,7 @@ def select_protein_coding_subset(args):
     chrom_filter = re.compile(args.chrom.strip('"'))
     filter_stats = {'biotype': col.Counter(), 'feattype': col.Counter(),
                     'featsize': col.Counter(), 'featsize_names': [],
+                    'featbounds': col.Counter(), 'featbounds_names': [],
                     'featloc': col.Counter(), 'featloc_names': [],
                     'featna': col.Counter(), 'featna_names': [],
                     'non_ccds': col.Counter(), 'non_ccds_names': []}
@@ -188,6 +252,11 @@ def select_protein_coding_subset(args):
                     if any([v == 'n/a' for v in not_na]):
                         filter_stats['featna']['gene'] += 1
                         filter_stats['featna_names'].append([this_gene[3]] + list(not_na))
+                        continue
+                    in_bounds = check_chrom_bounds(this_gene, args.boundary, chrom_bounds[this_gene[0]])
+                    if not in_bounds:
+                        filter_stats['featbounds']['gene'] += 1
+                        filter_stats['featbounds_names'].append([this_gene[3], '{}-{}-{}-{}'.format(this_gene[0], this_gene[1], this_gene[2], this_gene[5])])
                         continue
                     use_genes.add(this_gene[3])
                     genes.append(this_gene)
