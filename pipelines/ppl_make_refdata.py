@@ -256,6 +256,36 @@ def build_pipeline(args, config, sci_obj):
     # ================================
 
     # ================================
+    # Major task: bowtie2 indices
+    #
+
+    sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+    dir_task_srmidx = os.path.join(workdir, 'srmidx')
+
+    dir_bowtie2_base = os.path.join(dir_task_srmidx, 'bowtie2')
+    cmd = config.get('Pipeline', 'bt2idx')
+    bt2_idx = pipe.subdivide(task_func=sci_obj.get_jobf('in_pat'),
+                             name='bt2_idx',
+                             input=output_from(genfasta),
+                             filter=formatter('(?P<ASSM>mm9)\.fa'),
+                             output=os.path.join(dir_bowtie2_base, '{ASSM[0]}*'),
+                             extras=[dir_bowtie2_base, '{ASSM[0]}*', cmd, jobcall])
+    bt2_idx = bt2_idx.mkdir(dir_bowtie2_base)
+
+    run_task_srmidx = pipe.merge(task_func=touch_checkfile,
+                                 name='task_srmidx',
+                                 input=output_from(bt2_idx),
+                                 output=os.path.join(dir_task_srmidx, 'run_task_srmidx.chk'))
+
+    #
+    # End of: bowtie2 indices
+    # ================================
+
+    # ================================
     # Major task: CpG islands
     #
     sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
