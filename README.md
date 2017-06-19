@@ -78,6 +78,8 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-03-03    http://www.orthodb.org/v9/download/odb9_OG2genes.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
 - 2017-03-03    http://www.orthodb.org/v9/download/odb9_OGs.tab.gz [http://www.orthodb.org/v9/ - PMID:25428351]
 - 2017-04-07    http://hgdownload.soe.ucsc.edu/gbdb/hg19/bbi/wgEncodeCrgMapabilityAlign50mer.bw
+- 2017-06-16    http://regiondb.s3.amazonaws.com/LOLACore_170206.tgz
+- 2017-06-16    http://regiondb.s3.amazonaws.com/LOLAExt_170206.tgz
 
 
 ## OrthoDB flat files

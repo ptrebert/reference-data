@@ -2,8 +2,13 @@ name: pplref
 channels:
   - bioconda
   - conda-forge
+  - r
 dependencies:
   - python=3.5
+  - openssl
+  - curl
+  # readline in defaults potentially buggy
+  - conda-forge::readline
   - numpy=1.11.2
   - twobitreader
   - bedtools=2.26.0
@@ -33,3 +38,13 @@ dependencies:
   - htslib=1.3.*
   - bitarray
   - bowtie2
+  - r-base>=3.3.*
+  - r-openssl
+  - r-curl
+  - r-devtools
+  - r-data.table
+  - r-optparse
+  - bioconductor-biostrings
+  - bioconductor-genomicranges
+  - bioconductor-iranges
+  - bioconductor-biocinstaller
