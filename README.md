@@ -80,6 +80,7 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-04-07    http://hgdownload.soe.ucsc.edu/gbdb/hg19/bbi/wgEncodeCrgMapabilityAlign50mer.bw
 - 2017-06-16    http://regiondb.s3.amazonaws.com/LOLACore_170206.tgz
 - 2017-06-16    http://regiondb.s3.amazonaws.com/LOLAExt_170206.tgz
+- 2017-06-23    http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
 
 
 ## OrthoDB flat files
