@@ -14,6 +14,7 @@ import xmlrpc.client as cli
 
 __CACHE_DIR__ = '/TL/deep/fhgfs/projects/pebert/thesis/refdata/lola/rawdata'
 __DOWNLAOD_BASE__ = '/TL/deep/fhgfs/projects/pebert/thesis/refdata/lola/rawdata/download'
+__DEEPBLUE_USERKEY__ = '/home/pebert/.ssh/id_deepblue.private'
 
 
 def parse_command_line():
@@ -21,7 +22,7 @@ def parse_command_line():
     :return:
     """
     parser = argp.ArgumentParser()
-    parser.add_argument('--user-key', '-uk', type=str, dest='userkey', default='P3P4ry8Z8BOnWJ0M')
+    parser.add_argument('--user-key', '-uk', type=str, dest='userkey', default=__DEEPBLUE_USERKEY__)
     parser.add_argument('--cache-dir', '-cd', type=str, dest='cachedir', default=__CACHE_DIR__)
     parser.add_argument('--dl-base', '-dl', type=str, dest='dlbase', default=__DOWNLAOD_BASE__)
     parser.add_argument('--genomes', '-g', type=str, nargs='+', dest='genomes',
@@ -209,6 +210,8 @@ def filter_samples(expinfo):
         if 'treated' in infos['description'].lower():
             continue
         t, m = infos['technique'], infos['epigenetic_mark']
+        if m == 'H2A.Z':
+            m = 'H2AZ'
         grp = determine_assay_group(t, m)
         if grp == 'skip':
             continue
@@ -238,6 +241,8 @@ def make_filenames(expinfo):
     dup_counter = col.Counter()
     for eid, infos in expinfo.items():
         project, assm, mark = infos['project'], infos['genome'], infos['epigenetic_mark']
+        if mark == 'H2A.Z':
+            mark = 'H2AZ'
         if project == 'Roadmap Epigenomics':
             project = 'REMC'
         project = project
@@ -371,7 +376,8 @@ def download_regions(srv, userkey, expinfo, dlbase):
                 else:
                     infos['request_dl'] = 'okay'
                     with gz.open(datafile, 'wt') as dump:
-                        _ = dump.write(res)
+                        _ = dump.write(res + '\n')
+                    print('Dumped: ', datafile)
                     with open(checkfile, 'w') as check:
                         _ = check.write('')
         else:
@@ -411,8 +417,13 @@ if __name__ == '__main__':
     try:
         args = parse_command_line()
         assert os.path.isdir(args.cachedir), 'Invalid path to caching folder: {}'.format(args.cachedir)
-        srv = init_deepblue_conn(args.userkey)
-        main(args, srv, args.userkey)
+        if os.path.isfile(args.userkey):
+            with open(args.userkey, 'r') as keyfile:
+                uk = keyfile.read().strip()
+        else:
+            uk = args.userkey
+        srv = init_deepblue_conn(uk)
+        main(args, srv, uk)
     except Exception as err:
         trb.print_exc()
         sys.stderr.write('\nError: {}\n'.format(err))
