@@ -7,13 +7,16 @@ import datetime as dt
 from ruffus import *
 
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
-from pipelines.auxmod.enhancer import process_merged_encode_enhancer, process_vista_enhancer
+from pipelines.auxmod.enhancer import process_merged_encode_enhancer, \
+    process_vista_enhancer, merge_genehancer_annotation, process_hsa_mapped, \
+    build_genehancer_map_params
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
 from pipelines.auxmod.chainfiles import build_chain_filter_commands, \
     build_symm_filter_commands, check_lifted_blocks, filter_rbest_net
 from pipelines.auxmod.bedroi import make_bed_roi, normalize_join
 from pipelines.auxmod.orthologs import match_ortholog_files
 from pipelines.auxmod.promoter import split_promoter_files, score_promoter_regions
+from pipelines.auxmod.loladb import split_by_file, make_lola_isect_params
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
 
@@ -729,12 +732,97 @@ def build_pipeline(args, config, sci_obj):
                                                         'mm9_sizes_chroms.tsv'),
                                            'mVE', 'Mouse']).mkdir(outdir)
 
+    dir_task_enh_gh = os.path.join(enh_rawdata, 'GeneHancerDump_v4-4-2')
+    enh_mrg_genehancer = pipe.merge(task_func=merge_genehancer_annotation,
+                                    name='merge_genehancer',
+                                    input=[os.path.join(dir_task_enh_gh, 'enhancers.txt'),
+                                           os.path.join(dir_task_enh_gh, 'enhancer_gene_associations.txt')],
+                                    output=os.path.join(outdir, 'hg38_enh_genehancer.bed'))
+    enh_mrg_genehancer = enh_mrg_genehancer.mkdir(outdir)
+    enh_mrg_genehancer = enh_mrg_genehancer.follows(enh_init)
+
+    sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('CrossmapEnv')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'hg19map')
+    enh_gh_hg19map = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='enh_gh_hg19map',
+                                    input=output_from(enh_mrg_genehancer),
+                                    filter=formatter(),
+                                    output=os.path.join(temp_task_enhancer, 'hg19_enh_genehancer_raw.bed'),
+                                    extras=[cmd, jobcall])
+
+    enh_gh_hg19proc = pipe.transform(task_func=process_hsa_mapped,
+                                     name='enh_gh_hg19proc',
+                                     input=output_from(enh_gh_hg19map),
+                                     filter=suffix('raw.bed'),
+                                     output='mrg.bed',
+                                     extras=[os.path.join(dir_task_enh_gh, 'enhancers.txt')])
+
+    sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'hg19final')
+    enh_gh_hg19final = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                      name='enh_gh_hg19final',
+                                      input=output_from(enh_gh_hg19proc),
+                                      filter=suffix('_mrg.bed'),
+                                      output='.bed',
+                                      output_dir=outdir,
+                                      extras=[cmd, jobcall])
+
+    cmd = config.get('Pipeline', 'hg19mldata').replace('\n', ' ')
+    enh_gh_mldata = pipe.subdivide(task_func=sci_obj.get_jobf('in_pat'),
+                                   name='enh_gh_mldata',
+                                   input=output_from(enh_gh_hg19final),
+                                   filter=formatter(),
+                                   output=os.path.join(temp_task_enhancer, 'hg19_genehancer_mldata_cvidx*'),
+                                   extras=[temp_task_enhancer, 'hg19*.pck', cmd, jobcall])
+
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'hg19tomap')
+    enh_gh_tomap = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='enh_gh_tomap',
+                                  input=output_from(enh_gh_hg19final),
+                                  filter=suffix('.bed'),
+                                  output='_map.bed',
+                                  output_dir=temp_task_enhancer,
+                                  extras=[cmd, jobcall])
+
+    sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('CrossmapEnv')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'ghmap')
+    enh_gh_map_params = build_genehancer_map_params(os.path.join(temp_task_enhancer, 'hg19_enh_genehancer_map.bed'),
+                                                    collect_full_paths(os.path.join(workdir, 'chainfiles', 'rbest_chain_filt'), 'hg19_*'),
+                                                    temp_task_enhancer, cmd, jobcall)
+    enh_gh_map = pipe.files(sci_obj.get_jobf('in_out'),
+                            enh_gh_map_params,
+                            name='enh_gh_map')
+    enh_gh_map = enh_gh_map.mkdir(temp_task_enhancer)
+    enh_gh_map = enh_gh_map.follows(enh_gh_tomap)
+
     run_task_enh = pipe.merge(task_func=touch_checkfile,
                               name='run_task_enh',
                               input=output_from(enh_super,
                                                 enh_hsa_fantom, enh_mmu_fantom,
                                                 enh_cat_encode, enh_mrg_encode, enh_hsa_encpp, enh_hsa_encdp,
-                                                enh_hsa_vista, enh_mmu_vista),
+                                                enh_hsa_vista, enh_mmu_vista, enh_mrg_genehancer, enh_gh_hg19map,
+                                                enh_gh_hg19proc, enh_gh_hg19final, enh_gh_tomap, enh_gh_map),
                               output=os.path.join(dir_task_enhancer, 'run_task_enh.chk'))
     #
     # End: major task enhancer
@@ -754,7 +842,7 @@ def build_pipeline(args, config, sci_obj):
     jacques_says = config.getboolean('Pipeline', 'liftover_check')
 
     chf_rawdata = os.path.join(dir_task_chainfiles, 'rawdata')
-    raw_chainfiles = collect_full_paths(chf_rawdata, '*.chain.gz')
+    raw_chainfiles = collect_full_paths(chf_rawdata, '*over.chain.gz')
     chf_init = pipe.originate(task_func=lambda x: x,
                               name='chf_init',
                               output=raw_chainfiles)
@@ -1032,7 +1120,7 @@ def build_pipeline(args, config, sci_obj):
     else:
         jobcall = sci_obj.ruffus_localjob()
     cons_rawdata = os.path.join(dir_task_conservation, 'rawdata')
-    raw_consfiles = collect_full_paths(cons_rawdata, '*Elem*.gz')
+    raw_consfiles = collect_full_paths(cons_rawdata, '*.gz')
     cons_init = pipe.originate(task_func=lambda x: x,
                                name='cons_init',
                                output=raw_consfiles)
@@ -1047,9 +1135,26 @@ def build_pipeline(args, config, sci_obj):
                                     output_dir=dir_elemtobed,
                                     extras=[cmd, jobcall]).mkdir(dir_elemtobed)
 
+    sci_obj.set_config_env(dict(config.items('NodeJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    dir_phylop_scores = os.path.join(dir_task_conservation, 'phylop', 'scores')
+    cmd = config.get('Pipeline', 'phylopscores')
+    phylop_scores = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
+                                 name='phylop_scores',
+                                 input=output_from(cons_init),
+                                 filter=formatter('chr[0-9XY]+\.(?P<SOURCE>phyloP46way)\.wigFix\.gz'),
+                                 output=os.path.join(dir_phylop_scores, 'hg19_{SOURCE[0]}_scores.h5'),
+                                 extras=[cmd, jobcall])
+    phylop_scores = phylop_scores.mkdir(dir_phylop_scores)
+
     run_task_conservation = pipe.merge(task_func=touch_checkfile,
                                        name='task_cons',
-                                       input=output_from(cons_init, cons_elemtobed),
+                                       input=output_from(cons_init, cons_elemtobed,
+                                                         phylop_scores),
                                        output=os.path.join(dir_task_conservation, 'run_task_conservation.chk'))
 
     #
@@ -1083,6 +1188,38 @@ def build_pipeline(args, config, sci_obj):
 
     #
     # End of major task: TSS
+    # =======================================
+
+    # =======================================
+    # Major task: LOLA database
+    #
+
+    dir_task_loladb = os.path.join(workdir, 'lola')
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    deepblue_check_files = collect_full_paths(os.path.join(dir_task_loladb, 'rawdata', 'download'), '*dl.chk')
+
+    lola_init = pipe.originate(task_func=lambda x: x,
+                               output=deepblue_check_files,
+                               name='lola_init')
+
+    cmd_isect = config.get('Pipeline', 'lola_isect')
+    cmd_copy = config.get('Pipeline', 'lola_copy')
+    lola_isect_params = make_lola_isect_params(deepblue_check_files,
+                                               os.path.join(dir_task_loladb, 'LOLACustom'),
+                                               cmd_isect, cmd_copy, jobcall)
+    lola_isect = pipe.files(sci_obj.get_jobf('ins_out'),
+                            lola_isect_params,
+                            name='lola_isect')
+    lola_isect = lola_isect.mkdir(os.path.join(dir_task_loladb, 'LOLACustom', 'hg19'))
+    lola_isect = lola_isect.mkdir(os.path.join(dir_task_loladb, 'LOLACustom', 'mm9'))
+
+    #
+    # End of major task: LOLA DB
     # =======================================
 
 

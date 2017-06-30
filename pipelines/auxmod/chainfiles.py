@@ -45,10 +45,13 @@ def build_chain_filter_commands(chainfiles, chromref, outpath, cmd, jobcall):
     params = []
     for chf in chainfiles:
         fp, fn = os.path.split(chf)
-        target, query = fn.split('.', 1)[0].split('To')
-        query = query[:1].lower() + query[1:]
-        tselect = chrom_select[target]
         try:
+            target, query = fn.split('.', 1)[0].split('To')
+        except ValueError:
+            continue
+        query = query[:1].lower() + query[1:]
+        try:
+            tselect = chrom_select[target]
             qselect = chrom_select[query]
         except KeyError:
             continue

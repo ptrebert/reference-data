@@ -66,6 +66,7 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-11-30    http://zlab-annotations.umassmed.edu/enhancers/20161130-062201-enhancer-like-mm10-BothDNaseAndH3K27ac.v3.zip
 - 2016-12-02    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; phastCons conserved elements] hg19_phastConsElem_vert_46way.tsv.gz
 - 2016-12-02    http://genome.ucsc.edu/cgi-bin/hgTables [UCSC table browser; phastCons conserved elements] mm9_phastConsElem_vert_30way.tsv.gz
+- 2016-12-02    http://hgdownload.cse.ucsc.edu/goldenpath/hg19/phastCons46way/vertebrate/chr*.phastCons46way.wigFix.gz 
 - 2016-12-13    http://www.bio-bigdata.com/SEA/download/SEA00201.bed [super enhancer mm9 - doi: 10.1093/nar/gkv1243 ]
 - 2017-01-04    ftp://ftp.ensembl.org/pub/grch37/release-87/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna_sm.primary_assembly.fa.gz
 - 2017-01-17    ftp://ftp.ebi.ac.uk/pub/databases/genenames/hcop/human_* [human orthologs for mouse, pig, cow etc]
@@ -82,6 +83,15 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-06-16    http://regiondb.s3.amazonaws.com/LOLAExt_170206.tgz
 - 2017-06-23    http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
 
+## bigWig/wiggle coordinates
+1. BigWig files created from bedGraph format use "0-start, half-open" coordinates
+2. bigWigs that represent variableStep and fixedStep data are generated from wiggle files that use "1-start, fully-closed" coordinates
+3. source: https://genome.ucsc.edu/goldenpath/help/wiggle.html (2017-06-28)
+
+## phyloP
+- "In the phyloP plots, sites predicted to be conserved are assigned positive scores,
+   while sites predicted to be fast-evolving are assigned negative scores."
+- source: table description on http://genome.ucsc.edu
 
 ## OrthoDB flat files
 odb9_OGs.tab.gz - Ortho DB orthologous groups
