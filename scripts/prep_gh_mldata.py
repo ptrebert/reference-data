@@ -60,6 +60,7 @@ def load_genes(fpath, chrom, subset):
                 break
     if data is not None:
         data.sort_values(by='tss', axis=0, ascending=True, inplace=True)
+        assert 'tss' in data.columns, 'Missing required tss column: {}'.format(data.columns)
     return data
 
 
@@ -69,6 +70,7 @@ def load_enhancer(fpath, chrom):
     :param chrom:
     :return:
     """
+    assert os.path.isfile(fpath), 'Invalid path to enhancer file: {}'.format(fpath)
     with open(fpath, 'r') as bedfile:
         header = bedfile.readline().split()
         header[0] = 'chrom'
@@ -78,12 +80,17 @@ def load_enhancer(fpath, chrom):
     if enh.empty:
         enh = None
         assoc_genes = {}
-    else:
+    elif 'name' in enh.columns or 'symbol' in enh.columns:
         enh.sort_values(by=['start', 'end'], axis=0, ascending=True, inplace=True)
         enh['mid'] = enh['start'] + ((enh['end'] - enh['start']) / 2).round(decimals=0)
         assoc_genes = set(itt.chain.from_iterable(enh['name'].str.split(',').tolist()))
         assoc_genes = assoc_genes.union(set(itt.chain.from_iterable(enh['symbol'].str.split(',').tolist())))
         assoc_genes = assoc_genes - {'n/a'}
+    else:
+        enh['mid'] = enh['start'] + ((enh['end'] - enh['start']) / 2).round(decimals=0)
+        assoc_genes = {}
+    if enh is not None:
+        assert 'mid' in enh.columns, 'Missing required mid column: {}'.format(enh.columns)
     return enh, assoc_genes
 
 
@@ -113,10 +120,15 @@ def comp_seq_features(seq, suffix):
     slen = float(len(seq))
     total_gc = (seq.count('c') + seq.count('g')) / slen
     total_cpg = seq.count('cg') / (slen / 2)
+    # https://doi.org/10.1101/111955
     total_tpa = seq.count('ta') / (slen / 2)
+    total_cpa = seq.count('ca') / (slen / 2)
+    total_gpa = seq.count('ga') / (slen / 2)
     rec = {'ftgc_pct_GC_' + suffix: total_gc * 100.,
-           'ftcpg_pct_CpG_' + suffix: total_cpg * 100.,
-           'fttpa_pct_TpA_' + suffix: total_tpa * 100.}
+           'ftdim_pct_CpG_' + suffix: total_cpg * 100.,
+           'ftdim_pct_TpA_' + suffix: total_tpa * 100.,
+           'ftdim_pct_CpA_' + suffix: total_cpa * 100.,
+           'ftdim_pct_GpA_' + suffix: total_gpa * 100.}
     return rec
 
 
@@ -126,6 +138,7 @@ def prepare_training_data(params):
     :return:
     """
     chrom, cargs, lock = params
+    assert cargs.train, 'Wrong mode'
     enh_set, assoc_genes = load_enhancer(cargs.enhancer, chrom)
     gene_set = load_genes(cargs.genes, chrom, assoc_genes)
     if enh_set is None or gene_set is None:
@@ -153,6 +166,7 @@ def prepare_training_data(params):
                 pair_feat['output'] = float(enhancer.assoc_score.split(',')[idx])
             else:
                 pair_feat['output'] = 0.
+            pair_feat.update(comp_seq_features(seq[enhancer.start:enhancer.end], 'enh'))
             pair_feat['ftenh_abs_score'] = enhancer.enhancer_score
             pair_feat['ftenh_abs_elite'] = enhancer.is_elite
             pair_feat['enh_name'] = enhancer.GHid
@@ -177,15 +191,59 @@ def prepare_training_data(params):
     return chrom, dataset.shape[0]
 
 
+def prepare_testing_data(params):
+    """
+    :param params:
+    :return:
+    """
+    chrom, cargs, lock = params
+    assert cargs.test, 'Wrong mode'
+    enh_set, assoc_genes = load_enhancer(cargs.enhancer, chrom)
+    gene_set = load_genes(cargs.genes, chrom, set())
+    if enh_set is None or gene_set is None:
+        return chrom, None
+    seq = load_sequence(cargs.sequence, chrom)
+    records = []
+    for gene in gene_set.itertuples():
+        base_feat = {'name': gene.name, 'symbol': gene.symbol}
+        base_feat.update(comp_seq_features(seq[gene.start:gene.end], 'reg5p'))
+        gene_nbh = gene_set.query('tss >= @gene.tss - 1000000 & tss <= @gene.tss + 1000000')
+        base_feat['ftnbh_abs_tss'] = gene_nbh.shape[0] - 1
+        enh_nbh = enh_set.query('mid >= @gene.tss - 1000000 & mid <= @gene.tss + 1000000')
+        if enh_nbh.empty:
+            continue
+        base_feat['ftnbh_abs_enh'] = enh_nbh.shape[0]
+        for enhancer in enh_nbh.itertuples():
+            pair_feat = dict(base_feat)
+            pair_feat.update(comp_seq_features(seq[enhancer.start:enhancer.end], 'enh'))
+            pair_feat['ftenh_abs_score'] = enhancer.enhancer_score
+            pair_feat['ftenh_abs_elite'] = enhancer.is_elite
+            pair_feat['enh_name'] = enhancer.GHid
+            pair_feat['enh_start'] = enhancer.start
+            pair_feat['enh_end'] = enhancer.end
+            pair_feat['ftenh_abs_dist'] = enhancer.mid - gene.tss
+            pair_feat['ftcons_abs_enh_mean'] = enhancer.ftcons_enh_abs_mean
+            pair_feat['ftcons_abs_enh_median'] = enhancer.ftcons_enh_abs_median
+            pair_feat['ftcons_abs_enh_max'] = enhancer.ftcons_enh_abs_max
+            pair_feat['ftcons_abs_enh_min'] = enhancer.ftcons_enh_abs_min
+            records.append(pair_feat)
+    dataset = pd.DataFrame.from_records(records, index=range(len(records)))
+    with lock:
+        with pd.HDFStore(cargs.output, 'a', complib='blosc', complevel=9) as hdf:
+            hdf.put(chrom, dataset, format='table')
+            hdf.flush()
+    return chrom, dataset.shape[0]
+
+
 def main(args):
     """
     :param args:
     :return:
     """
     chromosomes = load_sequence(args.sequence, 'all', args.chromosomes)
-    data_splits = 21  # 20 models, 1 validation set
-    model_indices = dict((k, col.defaultdict(list)) for k in range(0, 20))
-    print(model_indices)
+    data_splits = 16  # 15 models, 1 validation set
+    valid_idx = data_splits - 1
+    model_indices = dict((k, col.defaultdict(list)) for k in range(0, valid_idx))
     model_indices['validation'] = col.defaultdict(list)
     with mp.Manager() as mng:
         lock = mng.Lock()
@@ -194,36 +252,39 @@ def main(args):
             if args.train:
                 resit = pool.imap_unordered(prepare_training_data, params)
             else:
-                #resit = pool.imap_unordered()
-                pass
+                resit = pool.imap_unordered(prepare_testing_data, params)
             for chrom, dsize in resit:
                 if dsize is None:
                     print('No data for chromosome: {}'.format(chrom))
                     continue
                 if args.train:
                     subset_size = dsize // data_splits
-                    for midx in range(0, 20):
+                    for midx in range(0, valid_idx):
                         model_indices[midx][chrom].append(midx * subset_size)
                         model_indices[midx][chrom].append(midx * subset_size + subset_size)
-                    assert dsize - (20 * subset_size + subset_size) < 21,\
-                        'Miscalcd index values, end up at: {} - {}'.format(20 * subset_size + subset_size, dsize)
-                    model_indices['validation'][chrom].append(20 * subset_size)
+                    assert dsize - (valid_idx * subset_size + subset_size) < data_splits,\
+                        'Miscalcd index values, end up at: {} - {}'.format(valid_idx * subset_size + subset_size, dsize)
+                    model_indices['validation'][chrom].append(valid_idx * subset_size)
                 else:
                     pass
-    for midx in model_indices.keys():
-        if midx == 'validation':
-            continue
-        outpath = args.cvindex + '_{}.pck'.format(midx)
-        to_dump = model_indices[midx]
-        to_dump['validation'] = model_indices['validation']
-        with open(outpath, 'wb') as dump:
-            pck.dump(to_dump, dump)
+    if args.train:
+        for midx in model_indices.keys():
+            if midx == 'validation':
+                continue
+            outpath = args.cvindex + '_{}.pck'.format(midx)
+            to_dump = model_indices[midx]
+            to_dump['validation'] = model_indices['validation']
+            with open(outpath, 'wb') as dump:
+                pck.dump(to_dump, dump)
     return
 
 
 if __name__ == '__main__':
+    mp.set_start_method('forkserver')
     try:
         args = parse_command_line()
+        with pd.HDFStore(args.output, 'w', complib='blosc', complevel=9):
+            pass
         main(args)
     except Exception:
         trb.print_exc()

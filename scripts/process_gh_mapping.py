@@ -22,6 +22,8 @@ def parse_command_line():
     parser = argp.ArgumentParser()
     parser.add_argument('--input', '-i', type=str, dest='inputfile')
     parser.add_argument('--cons', '-c', type=str, dest='conservation')
+    parser.add_argument('--direction', '-d', type=str, choices=['target', 'query'], dest='direction')
+    parser.add_argument('--chromosomes', '-chr', type=str, dest='chromosomes')
     parser.add_argument('--workers', '-w', type=int, default=4, dest='workers')
     parser.add_argument('--output', '-o', type=str, dest='outputfile')
     args = parser.parse_args()
@@ -90,7 +92,7 @@ def process_mapped_enhancer(params):
     return regions
 
 
-def main(args):
+def process_target_enhancer(args):
     """
     :param args:
     :return:
@@ -112,14 +114,133 @@ def main(args):
             writer = csv.DictWriter(out, fieldnames=header, delimiter='\t', extrasaction='ignore')
             writer.writeheader()
             writer.writerows(outbuffer)
+    return
 
+
+def process_annotated_enhancer(params):
+    """
+    :param params:
+    :return:
+    """
+    enh_file, chrom = params
+    header = ['chrom', 'start', 'end', 'GHid', 'enhancer_score', 'is_elite',
+              'ftcons_enh_abs_mean', 'ftcons_enh_abs_median',
+              'ftcons_enh_abs_min', 'ftcons_enh_abs_max']
+    enh_collect = col.defaultdict(list)
+    with open(enh_file, 'r') as infile:
+        rows = csv.DictReader(infile, delimiter='\t', fieldnames=header)
+        for row in rows:
+            if row['chrom'] == chrom:
+                row['start'] = int(row['start'])
+                row['end'] = int(row['end'])
+                row['enhancer_score'] = float(row['enhancer_score'])
+                row['ftcons_enh_abs_mean'] = float(row['ftcons_enh_abs_mean'])
+                enh_collect[row['GHid']].append(row)
+    enh_collect = merge_split_enhancers(enh_collect)
+
+    ivtree = ivt.IntervalTree()
+    for r in enh_collect:
+        ivtree[r['start']:r['end']] = r['GHid'], r['ftcons_enh_abs_mean'], r['ftcons_enh_abs_min']
+    enh_collect = sorted(enh_collect, key=lambda d: d['ftcons_enh_abs_mean'])
+    blacklist = set()
+    whitelist = set()
+    for item in enh_collect:
+        ghid = item['GHid']
+        if ghid in blacklist or ghid in whitelist:
+            continue
+        overlaps = ivtree[item['start']:item['end']]
+        if len(overlaps) == 1:
+            # that is: only self overlap
+            whitelist.add(ghid)
+            continue
+        elif len(overlaps) > 1:
+            if any([o.data[0] in whitelist for o in overlaps if o.data[0] != ghid]):
+                # region overlaps with a whitelist region -> blacklist
+                blacklist.add(ghid)
+                continue
+            overlaps = [o for o in sorted(overlaps, key=lambda i: (i.data[1], i.data[2])) if o.data[0] not in blacklist]
+            if overlaps[0].data[0] == ghid:
+                # the query region has highest conservation
+                # others can safely be blacklisted
+                whitelist.add(ghid)
+                [blacklist.add(o.data[0]) for o in overlaps[1:]]
+            else:
+                # another region is selected; could be that among
+                # the remaining regions, others might also be feasible
+                blacklist.add(ghid)
+                whitelist.add(overlaps[0].data[0])
+        else:
+            raise AssertionError('No self-overlap in tree: {}'.format(item))
+    enh_collect = sorted([r for r in enh_collect if r['GHid'] in whitelist], key=lambda x: (x['start'], x['end']))
+    return enh_collect
+
+
+def merge_split_enhancers(collector):
+    """
+    :param collector:
+    :return:
+    """
+    mrg_collect = []
+    for ghid, splits in collector.items():
+        if len(splits) == 1:
+            mrg_collect.append(splits[0])
+            continue
+        c = 1
+        splits = sorted(splits, key=lambda d: (d['start'], d['end']))
+        s, e = splits[0]['start'], splits[1]['end']
+        for idx, entry in enumerate(splits[:-1]):
+            if splits[idx+1]['start'] <= e + 100:
+                s = min(s, splits[idx+1]['start'])
+                e = max(e, splits[idx+1]['end'])
+            else:
+                new_enh = dict(splits[0])
+                new_enh['GHid'] = new_enh['GHid'] + '-{}-{}'.format(new_enh['chrom'].strip('chr'), c)
+                new_enh['start'] = s
+                new_enh['end'] = e
+                mrg_collect.append(new_enh)
+                c += 1
+                s, e = splits[idx+1]['start'], splits[idx+1]['end']
+        new_enh = dict(splits[0])
+        new_enh['GHid'] = new_enh['GHid'] + '-{}-{}'.format(new_enh['chrom'].strip('chr'), c)
+        new_enh['start'] = s
+        new_enh['end'] = e
+        mrg_collect.append(new_enh)
+    mrg_collect = [m for m in mrg_collect if m['end'] - m['start'] > 49]
+    return mrg_collect
+
+
+def process_query_enhancer(args):
+    """
+    :param args:
+    :return:
+    """
+    with open(args.chromosomes, 'r') as infile:
+        chroms = [l.split()[0].strip() for l in infile.readlines()]
+    header = ['chrom', 'start', 'end', 'GHid', 'enhancer_score', 'is_elite',
+              'ftcons_enh_abs_mean', 'ftcons_enh_abs_median',
+              'ftcons_enh_abs_min', 'ftcons_enh_abs_max']
+    params = [(args.inputfile, c) for c in chroms]
+    with mp.Pool(args.workers) as pool:
+        res = pool.imap_unordered(process_annotated_enhancer, params)
+        outbuffer = []
+        for regions in res:
+            outbuffer.extend(regions)
+        outbuffer = sorted(outbuffer, key=lambda d: (d['chrom'], d['start'], d['end']))
+        with open(args.outputfile, 'w') as out:
+            _ = out.write('#')
+            writer = csv.DictWriter(out, fieldnames=header, delimiter='\t', extrasaction='ignore')
+            writer.writeheader()
+            writer.writerows(outbuffer)
     return
 
 
 if __name__ == '__main__':
     try:
         args = parse_command_line()
-        main(args)
+        if args.direction == 'target':
+            process_target_enhancer(args)
+        else:
+            process_query_enhancer(args)
     except Exception as err:
         trb.print_exc()
         raise err

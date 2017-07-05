@@ -5,6 +5,7 @@ import sys as sys
 import collections as col
 import csv as csv
 import operator as op
+import fnmatch as fnm
 import io as io
 
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, check_bounds
@@ -292,5 +293,44 @@ def build_genehancer_map_params(inputfile, chainfiles, outdir, cmd, jobcall):
         tmp = cmd.format(**{'chainfile': chf})
         arglist.append([inputfile, outpath, tmp, jobcall])
     if chainfiles and os.path.isfile(inputfile):
+        assert arglist, 'No arguments created'
+    return arglist
+
+
+def build_genehancer_dset_params(inputfiles, outdir, seqfiles, genefiles, cmd, jobcall):
+    """
+    :param inputfiles:
+    :param outdir:
+    :param seqfiles:
+    :param genefiles:
+    :param cmd:
+    :param jobcall:
+    :return:
+    """
+    arglist = []
+    for inpf in inputfiles:
+        fp, fn = os.path.split(inpf)
+        assm = fn.split('_')[0]
+        seq = fnm.filter(seqfiles, '*/' + assm + '*.2bit')
+        try:
+            assert len(seq) == 1, 'Genomic sequence error: {} - {}'.format(assm, seq)
+        except AssertionError:
+            if assm == 'hg38':
+                continue
+            raise
+        seqfile = seq[0]
+        genes = fnm.filter(genefiles, '*' + assm + '*reg5p.h5')
+        try:
+            assert len(genes) == 1, 'Gene file error: {} - {}'.format(assm, genes)
+        except AssertionError:
+            if assm == 'mm10':
+                continue
+            raise
+        genefile = genes[0]
+        tmp = cmd.format(**{'sequence': seqfile, 'genes': genefile})
+        outname = assm + '_gh_dataset.h5'
+        outpath = os.path.join(outdir, outname)
+        arglist.append([inpf, outpath, tmp, jobcall])
+    if inputfiles:
         assert arglist, 'No arguments created'
     return arglist

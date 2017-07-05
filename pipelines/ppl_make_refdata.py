@@ -9,7 +9,7 @@ from ruffus import *
 from pipelines.auxmod.auxiliary import read_chromsizes, open_comp, collect_full_paths
 from pipelines.auxmod.enhancer import process_merged_encode_enhancer, \
     process_vista_enhancer, merge_genehancer_annotation, process_hsa_mapped, \
-    build_genehancer_map_params
+    build_genehancer_map_params, build_genehancer_dset_params
 from pipelines.auxmod.cpgislands import process_ucsc_cgi
 from pipelines.auxmod.chainfiles import build_chain_filter_commands, \
     build_symm_filter_commands, check_lifted_blocks, filter_rbest_net
@@ -777,6 +777,12 @@ def build_pipeline(args, config, sci_obj):
                                       output_dir=outdir,
                                       extras=[cmd, jobcall])
 
+    sci_obj.set_config_env(dict(config.items('NodeJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
     cmd = config.get('Pipeline', 'hg19mldata').replace('\n', ' ')
     enh_gh_mldata = pipe.subdivide(task_func=sci_obj.get_jobf('in_pat'),
                                    name='enh_gh_mldata',
@@ -784,6 +790,14 @@ def build_pipeline(args, config, sci_obj):
                                    filter=formatter(),
                                    output=os.path.join(temp_task_enhancer, 'hg19_genehancer_mldata_cvidx*'),
                                    extras=[temp_task_enhancer, 'hg19*.pck', cmd, jobcall])
+
+    cmd = config.get('Pipeline', 'hg19train')
+    enh_gh_train = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='enh_gh_train',
+                                  input=output_from(enh_gh_mldata),
+                                  filter=formatter('hg19_genehancer_mldata_cvidx_(?P<MID>[0-9]+)\.pck'),
+                                  output=os.path.join(temp_task_enhancer, 'hg19_genehancer_rfcls_{MID[0]}.pck'),
+                                  extras=[cmd, jobcall])
 
     sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
     if args.gridmode:
@@ -816,13 +830,72 @@ def build_pipeline(args, config, sci_obj):
     enh_gh_map = enh_gh_map.mkdir(temp_task_enhancer)
     enh_gh_map = enh_gh_map.follows(enh_gh_tomap)
 
+    sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'specfinal')
+    enh_gh_species = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='enh_gh_species',
+                                    input=output_from(enh_gh_map),
+                                    filter=formatter('(?P<ASSM>[a-zA-Z0-9]+)_enh_genehancer_raw\.bed'),
+                                    output=os.path.join(outdir, '{ASSM[0]}_enh_genehancer.bed'),
+                                    extras=[cmd, jobcall])
+    enh_gh_species = enh_gh_species.mkdir(outdir)
+
+    cmd = config.get('Pipeline', 'specmldata')
+    enh_gh_est_params = build_genehancer_dset_params(collect_full_paths(outdir, '*_enh_genehancer.bed'),
+                                                     temp_task_enhancer,
+                                                     collect_full_paths(dir_gen_2bit, '*.2bit'),
+                                                     collect_full_paths(pc_roi_conv_hdf, '*reg5p.h5'),
+                                                     cmd, jobcall)
+    enh_gh_est = pipe.files(sci_obj.get_jobf('in_out'),
+                            enh_gh_est_params,
+                            name='enh_gh_est')
+    enh_gh_est = enh_gh_est.follows(enh_gh_species)
+
+    sci_obj.set_config_env(dict(config.items('NodeJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'specenhest')
+    enh_gh_predict = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='enh_gh_predict',
+                                    input=output_from(enh_gh_est),
+                                    filter=suffix('dataset.h5'),
+                                    output='prediction.h5',
+                                    output_dir=temp_task_enhancer,
+                                    extras=[cmd, jobcall])
+
+    sci_obj.set_config_env(dict(config.items('JobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+
+    cmd = config.get('Pipeline', 'specega')
+    dir_task_enh_ega = os.path.join(dir_task_enhancer, 'genehancer_ega')
+    enh_gh_specega = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='enh_gh_specega',
+                                    input=output_from(enh_gh_predict),
+                                    filter=suffix('prediction.h5'),
+                                    output='ega.tsv',
+                                    output_dir=dir_task_enh_ega,
+                                    extras=[cmd, jobcall])
+    enh_gh_specega = enh_gh_specega.mkdir(dir_task_enh_ega)
+
     run_task_enh = pipe.merge(task_func=touch_checkfile,
                               name='run_task_enh',
                               input=output_from(enh_super,
                                                 enh_hsa_fantom, enh_mmu_fantom,
                                                 enh_cat_encode, enh_mrg_encode, enh_hsa_encpp, enh_hsa_encdp,
                                                 enh_hsa_vista, enh_mmu_vista, enh_mrg_genehancer, enh_gh_hg19map,
-                                                enh_gh_hg19proc, enh_gh_hg19final, enh_gh_tomap, enh_gh_map),
+                                                enh_gh_hg19proc, enh_gh_hg19final, enh_gh_tomap, enh_gh_map,
+                                                enh_gh_specega),
                               output=os.path.join(dir_task_enhancer, 'run_task_enh.chk'))
     #
     # End: major task enhancer
