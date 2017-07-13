@@ -444,6 +444,47 @@ def build_pipeline(args, config, sci_obj):
                                 extras=[os.path.join(dir_out_chromaugo, '{ASSM[0]}_chrom_augo.tsv'),
                                         'body']).mkdir(pc_roi_dump).jobs_limit(4)
 
+    pc_ascreg_dump = os.path.join(pc_subset, 'asc_bed')
+    cmd = config.get('Pipeline', 'hsaexons')
+    gm_pc_hsaexons = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='gm_pc_hsaexons',
+                                    input=output_from(gm_gtftobed),
+                                    filter=formatter('gencode\.(?P<GENCVER>v19)\.annotation\.bed\.gz'),
+                                    output=os.path.join(pc_ascreg_dump, 'hsa_hg19_gencode_{GENCVER[0]}.exons.tsv'),
+                                    extras=[cmd, jobcall])
+    gm_pc_hsaexons = gm_pc_hsaexons.mkdir(pc_ascreg_dump)
+    gm_pc_hsaexons = gm_pc_hsaexons.follows(gm_pc_hg19)
+    
+    cmd = config.get('Pipeline', 'mmuexons')
+    gm_pc_mmuexons = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='gm_pc_mmuexons',
+                                    input=output_from(gm_gtftobed),
+                                    filter=formatter('gencode\.(?P<GENCVER>vM1)\.annotation\.bed\.gz'),
+                                    output=os.path.join(pc_ascreg_dump, 'mmu_mm9_gencode_{GENCVER[0]}.exons.tsv'),
+                                    extras=[cmd, jobcall])
+    gm_pc_mmuexons = gm_pc_mmuexons.mkdir(pc_ascreg_dump)
+    gm_pc_mmuexons = gm_pc_mmuexons.follows(gm_pc_mm9)
+    
+    cmd = config.get('Pipeline', 'btaexons')
+    gm_pc_btaexons = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='gm_pc_btaexons',
+                                    input=output_from(gm_gfftobed),
+                                    filter=formatter(),
+                                    output=os.path.join(pc_ascreg_dump, 'bta_bosTau7_ensembl_v75.exons.tsv'),
+                                    extras=[cmd, jobcall])
+    gm_pc_btaexons = gm_pc_btaexons.mkdir(pc_ascreg_dump)
+    gm_pc_btaexons = gm_pc_btaexons.follows(gm_pc_bta7)
+
+    cmd = config.get('Pipeline', 'ensexons')
+    gm_pc_ensexons = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                    name='gm_pc_ensexons',
+                                    input=output_from(gm_enstobed),
+                                    filter=formatter('(?P<ANNOTID>\w+)\.bed\.gz'),
+                                    output=os.path.join(pc_ascreg_dump, '{ANNOTID[0]}.exons.tsv'),
+                                    extras=[cmd, jobcall])
+    gm_pc_ensexons = gm_pc_ensexons.mkdir(pc_ascreg_dump)
+    gm_pc_ensexons = gm_pc_ensexons.follows(gm_pc_ens)
+
     cmd = config.get('Pipeline', 'subpchdf').replace('\n', ' ')
     pc_roi_conv_hdf = os.path.join(pc_subset, 'roi_hdf')
     gm_pc_hdf = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
@@ -460,7 +501,9 @@ def build_pipeline(args, config, sci_obj):
                                     input=output_from(gm_gtftobed, gm_gfftobed, gm_enstobed,
                                                       gm_pc_hg19, gm_pc_mm9, gm_pc_bta7, gm_pc_ens,
                                                       gm_pc_uprr, gm_pc_reg5p, gm_pc_body,
-                                                      gm_pc_hdf),
+                                                      gm_pc_hdf,
+                                                      gm_pc_hsaexons, gm_pc_mmuexons,
+                                                      gm_pc_btaexons, gm_pc_ensexons),
                                     output=os.path.join(dir_task_genemodel, 'run_task_genemodel.chk'))
 
     #
