@@ -1258,19 +1258,48 @@ def build_pipeline(args, config, sci_obj):
         jobcall = sci_obj.ruffus_localjob()
 
     dir_phylop_scores = os.path.join(dir_task_conservation, 'phylop', 'scores')
-    cmd = config.get('Pipeline', 'phylopscores')
-    phylop_scores = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
-                                 name='phylop_scores',
-                                 input=output_from(cons_init),
-                                 filter=formatter('chr[0-9XY]+\.(?P<SOURCE>phyloP46way)\.wigFix\.gz'),
-                                 output=os.path.join(dir_phylop_scores, 'hg19_{SOURCE[0]}_scores.h5'),
-                                 extras=[cmd, jobcall])
-    phylop_scores = phylop_scores.mkdir(dir_phylop_scores)
+    
+    cmd = config.get('Pipeline', 'hsaphylop')
+    hsa_phylop = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
+                              name='hsa_phylop_scores',
+                              input=output_from(cons_init),
+                              filter=formatter('chr[0-9XY]+\.(?P<SOURCE>phyloP46way)\.wigFix\.gz'),
+                              output=os.path.join(dir_phylop_scores, 'hg19_{SOURCE[0]}_scores.h5'),
+                              extras=[cmd, jobcall])
+    hsa_phylop = hsa_phylop.mkdir(dir_phylop_scores)
+    
+    cmd = config.get('Pipeline', 'mmuphylop')
+    mmu_phylop = pipe.collate(task_func=sci_obj.get_jobf('ins_out'),
+                              name='mmu_phylop_scores',
+                              input=output_from(cons_init),
+                              filter=formatter('chr[0-9XY]+\.(?P<SOURCE>phyloP30way)\.wigFix\.gz'),
+                              output=os.path.join(dir_phylop_scores, 'mm9_{SOURCE[0]}_scores.h5'),
+                              extras=[cmd, jobcall])
+    mmu_phylop = mmu_phylop.mkdir(dir_phylop_scores)
+
+    cmd = config.get('Pipeline', 'mmugenecons')
+    mmu_gene_scores = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                     name='mmu_gene_scores',
+                                     input=output_from(mmu_phylop),
+                                     filter=formatter(),
+                                     output=os.path.join(dir_task_conservation, 'genes', 'mm9_pc-genes_phylop_tsswin.h5'),
+                                     extras=[cmd, jobcall])
+    mmu_gene_scores = mmu_gene_scores.mkdir(os.path.join(dir_task_conservation, 'genes'))
+
+    cmd = config.get('Pipeline', 'hsagenecons')
+    hsa_gene_scores = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                     name='hsa_gene_scores',
+                                     input=output_from(hsa_phylop),
+                                     filter=formatter(),
+                                     output=os.path.join(dir_task_conservation, 'genes', 'hg19_pc-genes_phylop_tsswin.h5'),
+                                     extras=[cmd, jobcall])
+    hsa_gene_scores = hsa_gene_scores.mkdir(os.path.join(dir_task_conservation, 'genes'))
 
     run_task_conservation = pipe.merge(task_func=touch_checkfile,
                                        name='task_cons',
                                        input=output_from(cons_init, cons_elemtobed,
-                                                         phylop_scores),
+                                                         hsa_phylop, mmu_phylop,
+                                                         mmu_gene_scores, hsa_gene_scores),
                                        output=os.path.join(dir_task_conservation, 'run_task_conservation.chk'))
 
     #
