@@ -49,7 +49,7 @@ def parse_command_line():
     parser.add_argument('--ccds-only', action='store_true', default=False, dest='ccdsonly',
                         help='From GENCODE: "member of the consensus CDS gene set, '
                              'confirming coding regions between ENSEMBL, UCSC, NCBI and HAVANA."')
-    parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9XYZW][0-9AB]?$", dest='chrom')
+    parser.add_argument('--chrom', '-c', type=str, default="(chr)?[0-9ABCDEFXYZW][0-9AB]?$", dest='chrom')
     parser.add_argument('--boundary', '-bo', type=int, default=5000, dest='boundary')
     parser.add_argument('--chrom-sizes', '-csz', type=str, dest='chromsizes', required=True)
     args = parser.parse_args()
