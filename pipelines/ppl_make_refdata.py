@@ -547,7 +547,7 @@ def build_pipeline(args, config, sci_obj):
     tm_idxgen31 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                                  name='tm_idxgen31',
                                  input=output_from(tm_fasta),
-                                 filter=formatter('(?P<TRANSCRIPTOME>(hsa|mmu)_\w+)\.transcripts\.fa\.gz'),
+                                 filter=formatter('(?P<TRANSCRIPTOME>(hsa|mmu|oas|mdo)_\w+)\.transcripts\.fa\.gz'),
                                  output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k31.idx/rsd.bin',
                                  extras=[cmd, jobcall])
     tm_idxgen31 = tm_idxgen31.mkdir(dir_tm_qindex)
@@ -557,7 +557,7 @@ def build_pipeline(args, config, sci_obj):
     tm_idxgen19 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                                  name='tm_idxgen19',
                                  input=output_from(tm_fasta),
-                                 filter=formatter('(?P<TRANSCRIPTOME>(cfa|bta|mmu|ssc|gga)_\w+)\.transcripts\.fa\.gz'),
+                                 filter=formatter('(?P<TRANSCRIPTOME>(cfa|bta|mmu|ssc|gga|rno|fca|ecb|ocu|mcc)_\w+)\.transcripts\.fa\.gz'),
                                  output='{subpath[0][1]}/qindex/{TRANSCRIPTOME[0]}.k19.idx/rsd.bin',
                                  extras=[cmd, jobcall])
     tm_idxgen19 = tm_idxgen19.mkdir(dir_tm_qindex)
@@ -596,6 +596,7 @@ def build_pipeline(args, config, sci_obj):
                              output=os.path.join(ortho_hdf_out, '{SOURCE[0]}_6species.h5'),
                              extras=[cmd, jobcall])
     proc_hcop = proc_hcop.mkdir(ortho_hdf_out)
+    proc_hcop = proc_hcop.active_if(False)
 
     sci_obj.set_config_env(dict(config.items('MemJobConfig')), dict(config.items('EnvConfig')))
     if args.gridmode:
@@ -608,7 +609,7 @@ def build_pipeline(args, config, sci_obj):
                                 name='proc_orthodb',
                                 input=output_from(ortho_init),
                                 filter=formatter('(?P<SOURCE>odb9)_\w+\.tab\.gz$'),
-                                output=os.path.join(ortho_hdf_out, '{SOURCE[0]}_6species.h5'),
+                                output=os.path.join(ortho_hdf_out, '{SOURCE[0]}_gene-orthologs.h5'),
                                 extras=[cmd, jobcall])
     proc_orthodb = proc_orthodb.mkdir(ortho_hdf_out)
     proc_orthodb = proc_orthodb.follows(run_task_genemodel)
@@ -1019,7 +1020,7 @@ def build_pipeline(args, config, sci_obj):
     # chromosome name. Thus, have to use chainfiles and chainToAxt -bed
     # to get target regions with strand information in query that can then
     # be lifted to the actual query
-    rbest_re = '(?P<TARGET>(hg19|mm9))_to_(?P<QUERY>(mm9|mm10|bosTau7|canFam3|susScr2|galGal3))(?P<EXT>\.[\w\.]+)'
+    rbest_re = '(?P<TARGET>(hg19|mm9))_to_(?P<QUERY>(mm9|mm10|bosTau7|canFam3|susScr2|galGal3|equCab2|felCat5|oryCun2|oviAri3|rheMac2|rn5))(?P<EXT>\.[\w\.]+)'
 
     cmd = config.get('Pipeline', 'trgbfilt').replace('\n', ' ')
     chf_rbest_filter = os.path.join(dir_task_chainfiles, 'rbest_chain_filt')

@@ -3,12 +3,14 @@
 
 import os as os
 import sys as sys
-import pandas as pd
-import numpy as np
 import collections as col
 import traceback as trb
 import argparse as argp
 import fnmatch as fnm
+import csv as csv
+
+import pandas as pd
+import numpy as np
 
 
 SPECIES_MAP = {'human': 'hsa',
@@ -30,21 +32,34 @@ def parse_command_line():
     parser.add_argument('--output', '-o', type=str, dest='outputfile')
     parser.add_argument('--strategy', '-s', type=str, choices=['top-down', 'bottom-up'],
                         dest='strategy', default='bottom-up')
+    parser.add_argument('--species-table', '-spt', type=str, default='', dest='speciestable')
     args = parser.parse_args()
     return args
 
 
-def tax_ids():
+def read_species_table(fpath, gene_annot):
     """
+    :param fpath:
     :return:
     """
-    ncbi_ids = [9615, 10090, 9606, 9913, 9823, 9031]
-    regular = ['dog', 'mouse', 'human', 'cow', 'pig', 'chicken']
-    abbr = ['cfa', 'mmu', 'hsa', 'bta', 'ssc', 'gga']
-    lookup = dict()
-    for t, n, a in zip(ncbi_ids, regular, abbr):
-        lookup[t] = {'name': n, 'code': a}
-    return lookup
+    gene_models = os.listdir(gene_annot)
+    lut = {}
+    with open(fpath, 'r', newline='') as table:
+        rows = csv.DictReader(table, delimiter='\t')
+        for row in rows:
+            modelfile = fnm.filter(gene_models, '{}_*.genes.bed.gz'.format(row['kegg_org_code']))
+            if len(modelfile) == 0:
+                # skip this species
+                continue
+            assert len(modelfile) == 1, \
+                'Multiple gene models for species {} / {}'.format(row['common_name', row['kegg_org_code']])
+            lut[row['common_name']] = {'tax_id': int(row['taxon_id']), 'code': row['kegg_org_code'],
+                                       'genes': os.path.join(gene_annot, modelfile[0])}
+            lut[row['kegg_org_code']] = {'tax_id': int(row['taxon_id']), 'name': row['common_name'],
+                                         'genes': os.path.join(gene_annot, modelfile[0])}
+            lut[int(row['taxon_id'])] = {'name': row['common_name'], 'code': row['kegg_org_code'],
+                                         'genes': os.path.join(gene_annot, modelfile[0])}
+    return lut
 
 
 def odb_header(which):
@@ -59,16 +74,23 @@ def odb_header(which):
     return all_headers[which]
 
 
-def merge_tables(genes, ogroups, mapping):
+def merge_tables(genes, ogroups, mapping, spec_annot):
     """
     :param genes:
     :param ogroups:
     :param mapping:
     :return:
     """
-    taxons = tax_ids()
-    indexer = genes['tax_id'].isin(taxons.keys())
+    taxons = set()
+    for k, v in spec_annot.items():
+        try:
+            taxons.add(v['tax_id'])
+        except KeyError:
+            continue
+    taxons = sorted(taxons)
+    indexer = genes['tax_id'].isin(taxons)
     species_genes = (genes.loc[indexer, :]).copy(deep=True)
+    assert not species_genes.empty, 'No genes selected based on taxon ids: {}'.format(taxons)
     indexer = mapping['odb_gene_id'].isin(species_genes['odb_gene_id'])
     species_map = (mapping.loc[indexer, :]).copy(deep=True)
     indexer = ogroups['og_id'].isin(species_map['og_id'])
@@ -80,7 +102,7 @@ def merge_tables(genes, ogroups, mapping):
     return merged
 
 
-def raw_process_input(args):
+def raw_process_input(args, spec_table):
     """
     :param args:
     :return:
@@ -107,21 +129,16 @@ def raw_process_input(args):
                                        dtype={'og_id': str, 'odb_gene_id': str})
         else:
             raise ValueError('Unexpected table type: {}'.format(inpf))
-    merged = merge_tables(genes_tab, og_tab, og2genes_tab)
+    merged = merge_tables(genes_tab, og_tab, og2genes_tab, spec_table)
     return merged
 
 
-def read_gene_model(basedir, species):
+def read_gene_model(fpath, species):
     """
-    :param basedir:
+    :param fpath:
     :param species:
     :return:
     """
-    abbr = SPECIES_MAP[species]
-    modelfiles = os.listdir(basedir)
-    modelfile = fnm.filter(modelfiles, '{}_*.genes.bed.gz'.format(abbr))
-    assert len(modelfile) == 1, 'No gene set identified: {} / {}'.format(species, abbr)
-    fpath = os.path.join(basedir, modelfile[0])
     genes = pd.read_csv(fpath, skip_blank_lines=True, header=0,
                         na_values='n/a', sep='\t', dtype=str,
                         usecols=['#chrom', 'name', 'symbol'])
@@ -263,6 +280,8 @@ def select_ortholog_groups(fpath, group_root):
                 shared_cols = set(groups.columns).intersection(set(hdf[k].columns))
                 groups = groups.merge(hdf[k], on=list(shared_cols),
                                       how='outer', suffixes=('', ''))
+    if groups is None or groups.empty:
+        return None
     groups.dropna(axis=0, how='any', inplace=True)
     groups.reset_index(drop=True, inplace=True)
     return groups
@@ -282,6 +301,8 @@ def dump_orthodb_data(dataset, species_a, species_b, group_root, outpath, mode):
         group = os.path.join(group_root, species_a, species_b)
     else:
         group = group_root
+    if dataset is None or dataset.empty:
+        return
     with pd.HDFStore(outpath, mode, complib='blosc', complevel=9) as hdf:
         hdf.put(group, dataset, format='table')
         hdf.flush()
@@ -293,32 +314,37 @@ def main():
     :return:
     """
     args = parse_command_line()
+    spec_lut = read_species_table(args.speciestable, args.annotation)
     # create or load cached data
     if args.cache != 'no_cache':
         cache_dir = os.path.dirname(args.inputfiles[0])
         setattr(args, 'cache', os.path.join(cache_dir, args.cache))
     if args.cache == 'no_cache':
-        merged = raw_process_input(args)
+        merged = raw_process_input(args, spec_lut)
     elif os.path.isfile(args.cache):
         with pd.HDFStore(args.cache, 'r') as hdf:
             merged = hdf['cache']
     else:
-        merged = raw_process_input(args)
+        merged = raw_process_input(args, spec_lut)
         with pd.HDFStore(args.cache, 'w', complib='blosc', complevel=9) as hdf:
             hdf.put('cache', merged, format='table')
     with pd.HDFStore(args.outputfile, 'w', complib='blosc', complevel=9) as hdf:
         hdf.put('/raw', merged, format='table')
+    all_species = {v['name'] for _, v in spec_lut.items() if 'name' in v}
+    assert len(all_species) > 0, 'No species selected from annotation table'
     for primary in ['human', 'mouse']:
-        prime_genes = read_gene_model(args.annotation, primary)
-        for secondary in SPECIES_MAP.keys():
+        prime_genes = read_gene_model(spec_lut[primary]['genes'], primary)
+        for secondary in sorted(all_species):
             if primary == secondary:
                 continue
-            sec_genes = read_gene_model(args.annotation, secondary)
+            sec_genes = read_gene_model(spec_lut[secondary]['genes'], secondary)
+            if sec_genes is None:
+                continue
             pairs = select_ortholog_pairs(merged.copy(), prime_genes.copy(), sec_genes.copy(),
-                                          primary, secondary, 'chr[0-9XYZW]+$', args.strategy)
+                                          primary, secondary, 'chr[0-9A-Z]+$', args.strategy)
             dump_orthodb_data(pairs, primary, secondary, 'augo/pairs', args.outputfile, 'a')
             pairs = select_ortholog_pairs(merged.copy(), prime_genes.copy(), sec_genes.copy(),
-                                          primary, secondary, 'chr[0-9]+$', args.strategy)
+                                          primary, secondary, 'chr[0-9A-F]+$', args.strategy)
             dump_orthodb_data(pairs, primary, secondary, 'auto/pairs', args.outputfile, 'a')
 
     groups = select_ortholog_groups(args.outputfile, 'auto/pairs')
