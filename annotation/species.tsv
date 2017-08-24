@@ -1,0 +1,16 @@
+species	common_name	taxon_id	kegg_org_code	ensembl_prefix	class	order	color_name	color_hex	color_rgb
+homo-sapiens	human	9606	hsa	ENS	mammals	primates	blue	0000ff	0-0-255
+mus-musculus	mouse	10090	mmu	ENSMUS	mammals	rodents	grey	505050	80-80-80
+rattus-norvegicus	rat	10116	rno	ENSRNO	mammals	rodents	yellow	ffff00	255-255-0
+canis-familiaris	dog	9615	cfa	ENSCAF	mammals	carnivores	red	ff0000	255-0-0
+sus-scrofa	pig	9823	ssc	ENSSSC	mammals	even-toed-ungulates	pink	ff32cf	255-0-255
+felis-catus	cat	9685	fca	ENSFCA	mammals	carnivores	darkred	c83232	200-50-50
+bos-taurus	cow	9913	bta	ENSBTA	mammals	even-toed-ungulates	purple	800080	128-0-128
+monodelphis-domestica	opossum	13616	mdo	ENSMOD	mammals	marsupials	orange	ff8000	255-128-0
+ovis-aries	sheep	9940	oas	ENSOAR	mammals	even-toed-ungulates	violet	7f00ff	127-0-255
+oryctolagus-cuniculus	rabbit	9986	ocu	ENSOCU	mammals	lagomorphs	cocoa	d2691e	210-105-30
+macaca-mulatta	rhesus	9544	mcc	ENSMMU	mammals	primates	lightblue	0096ff	0-150-255
+equus-caballus	horse	9796	ecb	ENSECA	mammals	odd-toed-ungulates	brown	964800	150-75-0
+gallus-gallus	chicken	9031	gga	ENSGGA	birds	galliforms	amber	ffbf00	255-191-0
+xenopus-tropicalis	frog	8364	xtr	ENSXET	amphibians	anura	darkgreen	009600	0-150-0
+anolis-carolinensis	lizard	28377	acs	ENSACA	reptiles	squamata	green	00ff00	0-255-0
