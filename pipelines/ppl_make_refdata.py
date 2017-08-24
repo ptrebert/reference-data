@@ -1020,7 +1020,7 @@ def build_pipeline(args, config, sci_obj):
     # chromosome name. Thus, have to use chainfiles and chainToAxt -bed
     # to get target regions with strand information in query that can then
     # be lifted to the actual query
-    rbest_re = '(?P<TARGET>(hg19|mm9))_to_(?P<QUERY>(mm9|mm10|bosTau7|canFam3|susScr2|galGal3|equCab2|felCat5|oryCun2|oviAri3|rheMac2|rn5))(?P<EXT>\.[\w\.]+)'
+    rbest_re = '(?P<TARGET>(hg19|mm9))_to_(?P<QUERY>(mm9|mm10|bosTau7|canFam3|susScr2|galGal3|equCab2|felCat5|oryCun2|oviAri3|rheMac2|rn5|monDom5))(?P<EXT>\.[\w\.]+)'
 
     cmd = config.get('Pipeline', 'trgbfilt').replace('\n', ' ')
     chf_rbest_filter = os.path.join(dir_task_chainfiles, 'rbest_chain_filt')
