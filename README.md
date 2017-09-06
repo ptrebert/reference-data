@@ -70,6 +70,7 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2016-12-13    http://www.bio-bigdata.com/SEA/download/SEA00201.bed [super enhancer mm9 - doi: 10.1093/nar/gkv1243 ]
 - 2017-01-04    ftp://ftp.ensembl.org/pub/grch37/release-87/fasta/homo_sapiens/dna/Homo_sapiens.GRCh37.dna_sm.primary_assembly.fa.gz
 - 2017-01-17    ftp://ftp.ebi.ac.uk/pub/databases/genenames/hcop/human_* [human orthologs for mouse, pig, cow etc]
+- 2017-01-19    http://www.epigenomes.ca/data/CEMT/resources/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
 - 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/hg19-human/wgEncodeHg19ConsensusSignalArtifactRegions.bed.gz
 - 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/mm10-mouse/mm10.blacklist.bed.gz
 - 2017-01-27    http://mitra.stanford.edu/kundaje/akundaje/release/blacklists/mm9-mouse/mm9-blacklist.bed.gz
@@ -123,6 +124,7 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-08-17    http://hgdownload.soe.ucsc.edu/goldenPath/felCat5/database/ensGene.txt.gz
 - 2017-08-17    http://hgdownload.soe.ucsc.edu/goldenPath/felCat5/database/ensemblSource.txt.gz
 - 2017-08-17    http://hgdownload.soe.ucsc.edu/goldenPath/felCat5/database/ensemblToGeneName.txt.gz
+- 2017-09-05    http://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.2bit
 
 ## bigWig/wiggle coordinates
 1. BigWig files created from bedGraph format use "0-start, half-open" coordinates

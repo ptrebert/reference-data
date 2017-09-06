@@ -135,35 +135,39 @@ def build_pipeline(args, config, sci_obj):
                                       name='genomes_raw_init',
                                       output=collect_full_paths(dir_gen_rawdata, '*'))
 
+    # this task solves an error in the gzip compression of hs37d5
     cmd = config.get('Pipeline', 'genstdfagz')
     dir_gen_stdfagz = os.path.join(dir_task_genomes, 'rawnorm')
     genstdfagz = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                                 name='genstdfagz',
                                 input=output_from(genomes_raw_init),
-                                filter=formatter('(?P<ASSM>\w+[0-9])\.fa\.gz'),
+                                filter=formatter('[\w\.]*(?P<ASSM>(GRCh37|hs37d5))[\w\.]*\.fa\.gz'),
                                 output=os.path.join(dir_gen_stdfagz, '{ASSM[0]}.fa.gz'),
-                                extras=[cmd, jobcall]).mkdir(dir_gen_stdfagz)
+                                extras=[cmd, jobcall])
+    genstdfagz = genstdfagz.mkdir(dir_gen_stdfagz)
+
+    proc_ihec38 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='proc_ihec38',
+                                 input=output_from(genomes_raw_init),
+                                 filter=formatter('[\w\.]*(?P<ASSM>GRCh38)_no_alt_analysis_set\.fna\.gz'),
+                                 output=os.path.join(dir_gen_stdfagz, 'ihec38.fa.gz'),
+                                 extras=[cmd, jobcall])
 
     dir_gen_2bit = os.path.join(dir_task_genomes, 'wg_2bit')
 
     cmd = config.get('Pipeline', 'to2bit')
     gen2bit = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
                              name='gen2bit',
-                             input=output_from(genstdfagz),
+                             input=output_from(genstdfagz, proc_ihec38),
                              filter=formatter('(?P<ASSM>[a-zA-Z0-9]+)\.fa\.gz'),
                              output=os.path.join(dir_gen_2bit, '{ASSM[0]}.2bit'),
-                             extras=[cmd, jobcall]).mkdir(dir_gen_2bit)
-
-    gen2bitren = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
-                                name='gen2bitren',
-                                input=output_from(genomes_raw_init),
-                                filter=formatter('Home_sapiens.+\.fa\.gz'),
-                                output=os.path.join(dir_gen_2bit, 'GRCh37.2bit'),
-                                extras=[cmd, jobcall])
+                             extras=[cmd, jobcall])
+    gen2bit = gen2bit.mkdir(dir_gen_2bit)
 
     genomes_2bit_init = pipe.originate(task_func=lambda x: x,
                                        name='genomes_2bit_init',
-                                       output=collect_full_paths(dir_gen_2bit, '*.2bit')).follows(gen2bit).follows(gen2bitren)
+                                       output=collect_full_paths(dir_gen_2bit, '*.2bit'))
+    genomes_2bit_init = genomes_2bit_init.follows(gen2bit)
 
     dir_gen_fagz = os.path.join(dir_task_genomes, 'wg_fagz')
     cmd = config.get('Pipeline', 'tofagz')
@@ -196,9 +200,10 @@ def build_pipeline(args, config, sci_obj):
 
     run_task_genomes = pipe.merge(task_func=touch_checkfile,
                                   name='task_genomes',
-                                  input=output_from(genomes_raw_init, genstdfagz, gen2bit,
+                                  input=output_from(genomes_raw_init, genstdfagz,
+                                                    gen2bit, proc_ihec38,
                                                     genomes_2bit_init, genfagz, genfabgz,
-                                                    gen2bitren, genfasta),
+                                                    genfasta),
                                   output=os.path.join(dir_task_genomes, 'run_task_genomes.chk'))
     #
     # End: major task genomes
