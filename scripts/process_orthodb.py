@@ -332,7 +332,10 @@ def main():
         hdf.put('/raw', merged, format='table')
     all_species = {v['name'] for _, v in spec_lut.items() if 'name' in v}
     assert len(all_species) > 0, 'No species selected from annotation table'
-    for primary in ['human', 'mouse']:
+    #for primary in ['human', 'mouse']:
+    # assert that human and mouse are always first in pair
+    primary_species = ['human', 'mouse'] + sorted(set(all_species) - {'human', 'mouse'})
+    for primary in primary_species:
         prime_genes = read_gene_model(spec_lut[primary]['genes'], primary)
         for secondary in sorted(all_species):
             if primary == secondary:
