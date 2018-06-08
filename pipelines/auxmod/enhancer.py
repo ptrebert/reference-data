@@ -108,7 +108,7 @@ def merge_genehancer_annotation(inputfiles, outputfile):
     :return:
     """
     enh_collect = dict()
-    with open(inputfiles[0], 'r', encoding='utf-8', newline='\n') as enh_file:
+    with open(inputfiles[0], 'r', encoding='utf-8', newline='') as enh_file:
         assert '\r\n' not in enh_file.readline(), 'Linefeed detected in {}'.format(inputfiles[0])
         # _ = enh_file.readline()
         header = ['chrom', 'start', 'end', 'cluster_id',  'GHid', 'enhancer_score', 'is_elite']
@@ -118,7 +118,7 @@ def merge_genehancer_annotation(inputfiles, outputfile):
             assert row['cluster_id'] not in enh_collect, 'Cluster duplicate: {}'.format(row)
             enh_collect[row['cluster_id']] = row
     assoc_collect = col.defaultdict(list)
-    with open(inputfiles[1], 'r', encoding='utf-8', newline='\n') as assoc:
+    with open(inputfiles[1], 'r', encoding='utf-8', newline='') as assoc:
         assert '\r\n' not in assoc.readline(), 'Linefeed detected in {}'.format(inputfiles[1])
         # _ = assoc.readline()
 
@@ -163,9 +163,11 @@ def merge_genehancer_annotation(inputfiles, outputfile):
     final = sorted(final, key=lambda x: (x['chrom'], int(x['start']), int(x['end'])))
     header = ['chrom', 'start', 'end', 'GHid', 'enhancer_score', 'is_elite', 'cluster_id',
               'name', 'symbol', 'assoc_score', 'enh_gene_dist']
-    with open(outputfile, 'w', encoding='utf-8', newline='\n') as out:
+    with open(outputfile, 'w', encoding='utf-8', newline='') as out:
         _ = out.write('#')
-        writer = csv.DictWriter(out, fieldnames=header, delimiter='\t', extrasaction='ignore')
+        writer = csv.DictWriter(out, fieldnames=header, dialect='unix',
+                                quoting=csv.QUOTE_NONE,
+                                delimiter='\t', extrasaction='ignore')
         writer.writeheader()
         writer.writerows(final)
     return out
