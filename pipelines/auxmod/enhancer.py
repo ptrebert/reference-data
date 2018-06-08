@@ -108,8 +108,9 @@ def merge_genehancer_annotation(inputfiles, outputfile):
     :return:
     """
     enh_collect = dict()
-    with open(inputfiles[0], 'r') as enh_file:
-        _ = enh_file.readline()
+    with open(inputfiles[0], 'r', encoding='utf-8', newline='\n') as enh_file:
+        assert '\r\n' not in enh_file.readline(), 'Linefeed detected in {}'.format(inputfiles[0])
+        # _ = enh_file.readline()
         header = ['chrom', 'start', 'end', 'cluster_id',  'GHid', 'enhancer_score', 'is_elite']
         rows = csv.DictReader(enh_file, delimiter='\t', fieldnames=header)
         for row in rows:
@@ -117,8 +118,10 @@ def merge_genehancer_annotation(inputfiles, outputfile):
             assert row['cluster_id'] not in enh_collect, 'Cluster duplicate: {}'.format(row)
             enh_collect[row['cluster_id']] = row
     assoc_collect = col.defaultdict(list)
-    with open(inputfiles[1], 'r') as assoc:
-        _ = assoc.readline()
+    with open(inputfiles[1], 'r', encoding='utf-8', newline='\n') as assoc:
+        assert '\r\n' not in assoc.readline(), 'Linefeed detected in {}'.format(inputfiles[1])
+        # _ = assoc.readline()
+
         header = ['cluster_id', 'gene_id', 'enh_gene_dist', 'assoc_score', 'is_elite']
         rows = csv.DictReader(assoc, delimiter='\t', fieldnames=header)
         for row in rows:
@@ -160,7 +163,7 @@ def merge_genehancer_annotation(inputfiles, outputfile):
     final = sorted(final, key=lambda x: (x['chrom'], int(x['start']), int(x['end'])))
     header = ['chrom', 'start', 'end', 'GHid', 'enhancer_score', 'is_elite', 'cluster_id',
               'name', 'symbol', 'assoc_score', 'enh_gene_dist']
-    with open(outputfile, 'w') as out:
+    with open(outputfile, 'w', encoding='utf-8', newline='\n') as out:
         _ = out.write('#')
         writer = csv.DictWriter(out, fieldnames=header, delimiter='\t', extrasaction='ignore')
         writer.writeheader()
@@ -315,7 +318,7 @@ def build_genehancer_dset_params(inputfiles, outdir, seqfiles, genefiles, cmd, j
         try:
             assert len(seq) == 1, 'Genomic sequence error: {} - {}'.format(assm, seq)
         except AssertionError:
-            if assm == 'hg38':
+            if assm in ['mm10', 'hg38', 'ihec38', 'GRCh37']:
                 continue
             raise
         seqfile = seq[0]
@@ -323,7 +326,7 @@ def build_genehancer_dset_params(inputfiles, outdir, seqfiles, genefiles, cmd, j
         try:
             assert len(genes) == 1, 'Gene file error: {} - {}'.format(assm, genes)
         except AssertionError:
-            if assm == 'mm10':
+            if assm in ['mm10', 'hg38', 'ihec38', 'GRCh37']:
                 continue
             raise
         genefile = genes[0]
