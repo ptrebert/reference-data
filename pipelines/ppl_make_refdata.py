@@ -16,7 +16,7 @@ from pipelines.auxmod.chainfiles import build_chain_filter_commands, \
 from pipelines.auxmod.bedroi import make_bed_roi, normalize_join
 from pipelines.auxmod.orthologs import match_ortholog_files
 from pipelines.auxmod.promoter import split_promoter_files, score_promoter_regions
-from pipelines.auxmod.loladb import split_by_file, make_lola_isect_params
+from pipelines.auxmod.loladb import split_by_file, make_lola_isect_params, make_lola_index
 
 from pipelines.auxmod.project_sarvesh import make_5p_window
 
@@ -106,15 +106,22 @@ def process_noname_bedfile(inputfile, outputfile, boundcheck, nprefix):
     return outputfile
 
 
-def build_pipeline(args, config, sci_obj):
+def build_pipeline(args, config, sci_obj, pipe):
     """
     :param args:
     :param config:
     :param sci_obj:
     :return:
     """
-
-    pipe = Pipeline(name=config.get('Pipeline', 'name'))
+    if pipe is None:
+        pipe = Pipeline(name=config.get('Pipeline', 'name'))
+    else:
+        # remove all previous tasks from pipeline
+        pipe.clear()
+        # turns out clear() seems NOT to have the effect
+        # of really clearing the pipeline object, do it manually...
+        pipe.task_names = set()
+        pipe.tasks = set()
 
     workdir = config.get('Pipeline', 'workdir')
 
@@ -279,7 +286,7 @@ def build_pipeline(args, config, sci_obj):
     bt2_idx = pipe.subdivide(task_func=sci_obj.get_jobf('in_pat'),
                              name='bt2_idx',
                              input=output_from(genfasta),
-                             filter=formatter('(?P<ASSM>mm9)\.fa'),
+                             filter=formatter('(?P<ASSM>(mm9|hg19|bosTau7|canFam3|felCat5|rheMac2|monDom5|oryCun2|rn5|susScr2))\.fa'),
                              output=os.path.join(dir_bowtie2_base, '{ASSM[0]}*'),
                              extras=[dir_bowtie2_base, '{ASSM[0]}*', cmd, jobcall])
     bt2_idx = bt2_idx.mkdir(dir_bowtie2_base)
@@ -292,6 +299,41 @@ def build_pipeline(args, config, sci_obj):
     #
     # End of: bowtie2 indices
     # ================================
+
+    # ==========================================
+    # Major task: compute effective genome size
+    #
+
+    sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+    dir_task_effgensize = os.path.join(workdir, 'effgensize')
+
+    dir_khmer_reports = os.path.join(dir_task_effgensize, 'khmer_rep')
+    cmd = config.get('Pipeline', 'khmer_uniq')
+    khmer_uniq = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                name='khmer_uniq',
+                                input=output_from(genfasta),
+                                filter=formatter('(?P<ASSM>\w+)\.fa'),
+                                output=os.path.join(dir_khmer_reports, '{ASSM[0]}_rep_k50.txt'),
+                                extras=[cmd, jobcall])
+    khmer_uniq = khmer_uniq.mkdir(dir_khmer_reports)
+
+    dir_facount_reports = os.path.join(dir_task_effgensize, 'facount_rep')
+    cmd = config.get('Pipeline', 'facount')
+    facount_gen = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                 name='facount_gen',
+                                 input=output_from(genfasta),
+                                 filter=formatter('(?P<ASSM>\w+)\.fa'),
+                                 output=os.path.join(dir_facount_reports, '{ASSM[0]}_stats_dinuc.tsv'),
+                                 extras=[cmd, jobcall])
+    facount_gen = facount_gen.mkdir(dir_facount_reports)
+
+    #
+    # End of: effective genome size
+    # ==============================
 
     # ================================
     # Major task: CpG islands
@@ -1357,6 +1399,7 @@ def build_pipeline(args, config, sci_obj):
     lola_init = pipe.originate(task_func=lambda x: x,
                                output=deepblue_check_files,
                                name='lola_init')
+    lola_init = lola_init.active_if(False)
 
     cmd_isect = config.get('Pipeline', 'lola_isect')
     cmd_copy = config.get('Pipeline', 'lola_copy')
@@ -1368,11 +1411,18 @@ def build_pipeline(args, config, sci_obj):
                             name='lola_isect')
     lola_isect = lola_isect.mkdir(os.path.join(dir_task_loladb, 'LOLACustom', 'hg19'))
     lola_isect = lola_isect.mkdir(os.path.join(dir_task_loladb, 'LOLACustom', 'mm9'))
+    lola_isect = lola_isect.active_if(False)
 
+    lola_index = pipe.collate(task_func=make_lola_index,
+                              name='lola_index',
+                              input=collect_full_paths(os.path.join(dir_task_loladb, 'LOLACustom'), '*.bed'),
+                              filter=formatter('.+/(?P<ASSM>(hg19|mm9))/(?P<COLLECTION>\w+)/regions/(?P<FILENAME>(ENCODE|REMC)[\w\-]+)\.bed$'),
+                              output=os.path.join('{subpath[0][1]}/{ASSM[0]}_{COLLECTION[0]}_index.chk'))
+    lola_index = lola_index.follows(lola_isect)
+    lola_index = lola_index.active_if(False)
     #
     # End of major task: LOLA DB
     # =======================================
-
 
     run_all = pipe.merge(task_func=touch_checkfile,
                          name='run_all',
