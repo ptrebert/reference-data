@@ -125,6 +125,14 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - 2017-08-17    http://hgdownload.soe.ucsc.edu/goldenPath/felCat5/database/ensemblSource.txt.gz
 - 2017-08-17    http://hgdownload.soe.ucsc.edu/goldenPath/felCat5/database/ensemblToGeneName.txt.gz
 - 2017-09-05    http://hgdownload.soe.ucsc.edu/goldenPath/hg38/bigZips/hg38.2bit
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_MOUSE.csv
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_HUMAN.csv
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_BOVIN.csv
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_CANFA.csv
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_CHICK.csv
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_MACMU.csv
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_MONDO.csv
+- 2017-12-11    https://raw.githubusercontent.com/marcottelab/Gene-Ages/master/Main/main_RAT.csv
 
 ## bigWig/wiggle coordinates
 1. BigWig files created from bedGraph format use "0-start, half-open" coordinates
@@ -159,6 +167,14 @@ odb9_genes.tab
 6.	NCBI gid, evaluated by mapping
 7.	description, evaluated by mapping
 
+## Gene age annotation
+Downloaded from Macotte lab as indicated above. Uniprot IDs extracted and 
+mapped to Ensembl identifiers using Uniprot's service: http://www.uniprot.org/uploadlists
+
+## Ensembl Protein ID mapping
+Manually downloaded ID conversion tables from
+http://may2012.archive.ensembl.org/biomart
+Corresponds to Ensembl 67
 
 ## UCSC Chainfiles
 

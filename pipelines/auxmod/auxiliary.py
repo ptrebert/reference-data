@@ -72,6 +72,7 @@ def check_bounds(chrom, start, end, bounds, fname):
         raise ValueError('Non-integer coordinates {} - {} - {} in file {}'.format(chrom, start, end, fname))
     except KeyError:
         # chromosome not in check file, skip
+        print('Skipped ', chrom)
         pass
     return good
 

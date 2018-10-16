@@ -30,6 +30,7 @@ dependencies:
   - ucsc-nettobed
   - ucsc-netchainsubset
   - ucsc-chaintoaxt
+  - ucsc-facount
   - pandas=0.19
   - pytables=3.2.3.1
   - scipy=0.18.*
@@ -50,3 +51,6 @@ dependencies:
   - bioconductor-genomicranges
   - bioconductor-iranges
   - bioconductor-biocinstaller
+  - khmer=2.1.2
+  - star=2.6.1b
+  - sambamba=0.6.6
