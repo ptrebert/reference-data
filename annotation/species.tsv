@@ -1,7 +1,7 @@
 species	common_name	taxon_id	kegg_org_code	ensembl_prefix	class	order	color_name	color_hex	color_rgb
 homo-sapiens	human	9606	hsa	ENS	mammals	primates	blue	0000ff	0-0-255
 mus-musculus	mouse	10090	mmu	ENSMUS	mammals	rodents	grey	505050	80-80-80
-rattus-norvegicus	rat	10116	rno	ENSRNO	mammals	rodents	yellow	ffff00	255-255-0
+rattus-norvegicus	rat	10116	rno	ENSRNO	mammals	rodents	mustard	d2d21e	210-210-30
 canis-familiaris	dog	9615	cfa	ENSCAF	mammals	carnivores	red	ff0000	255-0-0
 sus-scrofa	pig	9823	ssc	ENSSSC	mammals	even-toed-ungulates	pink	ff32cf	255-0-255
 felis-catus	cat	9685	fca	ENSFCA	mammals	carnivores	darkred	c83232	200-50-50

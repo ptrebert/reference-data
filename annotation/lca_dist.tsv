@@ -1,0 +1,16 @@
+timetree-org	human	mouse	rat	dog	pig	cat	cow	opossum	sheep	rabbit	rhesus	horse	chicken	frog	lizard
+human	0	90	90	96	94	94	94	160	96	90	29	96	312	352	312
+mouse	90	0	20	94	94	94	94	160	96	80	90	96	312	352	312
+rat	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+dog	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+pig	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+cat	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+cow	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+opossum	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+sheep	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+rabbit	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+rhesus	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+horse	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+chicken	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+frog	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+lizard	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
