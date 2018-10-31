@@ -106,6 +106,33 @@ def process_noname_bedfile(inputfile, outputfile, boundcheck, nprefix):
     return outputfile
 
 
+def filter_alt_hap_chromosomes(inputfile, outputfile):
+    """
+    Filter chromosomes with names containing alt or hap
+    as preparation for STAR map index
+    """
+    line_buffer = io.StringIO()
+    keep = False
+    just_link = True
+    with open(inputfile, 'r') as fasta:
+        for line in fasta:
+            if line.startswith('>'):
+                if 'alt' in line or 'hap' in line:
+                    keep = False
+                    just_link = False
+                else:
+                    keep = True
+            if keep:
+                line_buffer.write(line)
+
+    if just_link:
+        os.symlink(inputfile, outputfile)
+    else:
+        with open(outputfile, 'w') as fasta:
+            _ = fasta.write(line_buffer.getvalue())
+    return outputfile
+
+
 def build_pipeline(args, config, sci_obj, pipe):
     """
     :param args:
@@ -205,12 +232,22 @@ def build_pipeline(args, config, sci_obj, pipe):
                               output_dir=dir_gen_fasta,
                               extras=[cmd, jobcall]).mkdir(dir_gen_fasta)
 
+    dir_noalt_fasta = os.path.join(dir_task_genomes, 'noalt_fasta')
+    noaltfasta = pipe.transform(task_func=filter_alt_hap_chromosomes,
+                                name='noaltfasta',
+                                input=output_from(genfasta),
+                                filter=suffix('.fa'),
+                                output='.no_alt.fa',
+                                output_dir=dir_noalt_fasta)
+    noaltfasta = noaltfasta.mkdir(dir_noalt_fasta)
+    noaltfasta = noaltfasta.jobs_limit(4)
+
     run_task_genomes = pipe.merge(task_func=touch_checkfile,
                                   name='task_genomes',
                                   input=output_from(genomes_raw_init, genstdfagz,
                                                     gen2bit, proc_ihec38,
                                                     genomes_2bit_init, genfagz, genfabgz,
-                                                    genfasta),
+                                                    genfasta, noaltfasta),
                                   output=os.path.join(dir_task_genomes, 'run_task_genomes.chk'))
     #
     # End: major task genomes
@@ -271,8 +308,9 @@ def build_pipeline(args, config, sci_obj, pipe):
     # ================================
 
     # ================================
-    # Major task: bowtie2 indices
+    # Major task: short read mapper indices
     #
+    # Start: bowtie2
 
     sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
     if args.gridmode:
@@ -291,13 +329,55 @@ def build_pipeline(args, config, sci_obj, pipe):
                              extras=[dir_bowtie2_base, '{ASSM[0]}*', cmd, jobcall])
     bt2_idx = bt2_idx.mkdir(dir_bowtie2_base)
 
+    #
+    # End of: bowtie2 indices
+    # 
+
+    # 
+    # Continue: STAR indices
+    #
+
+    sci_obj.set_config_env(dict(config.items('ParallelJobConfig')), dict(config.items('EnvConfig')))
+    if args.gridmode:
+        jobcall = sci_obj.ruffus_gridjob()
+    else:
+        jobcall = sci_obj.ruffus_localjob()
+    dir_task_srmidx = os.path.join(workdir, 'srmidx')
+
+    cmd = config.get('Pipeline', 'staridx_hg19')
+    star_hg19 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                               name='star_hg19',
+                               input=output_from(noaltfasta),
+                               filter=formatter('(?P<ASSM>hg19)\.no_alt\.fa$'),
+                               output=os.path.join(dir_task_srmidx, 'star_{ASSM[0]}_gencode-v19', 'SA'),
+                               extras=[cmd, jobcall])
+    star_hg19 = star_hg19.mkdir(os.path.join(dir_task_srmidx, 'star_hg19_gencode-v19'))
+
+    cmd = config.get('Pipeline', 'staridx_mm9')
+    star_mm9 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                              name='star_mm9',
+                              input=output_from(noaltfasta),
+                              filter=formatter('(?P<ASSM>mm9)\.no_alt\.fa$'),
+                              output=os.path.join(dir_task_srmidx, 'star_{ASSM[0]}_gencode-vM1', 'SA'),
+                              extras=[cmd, jobcall])
+    star_mm9 = star_mm9.mkdir(os.path.join(dir_task_srmidx, 'star_mm9_gencode-vM1'))
+
+    cmd = config.get('Pipeline', 'staridx_bosTau7')
+    star_bosTau7 = pipe.transform(task_func=sci_obj.get_jobf('in_out'),
+                                  name='star_bosTau7',
+                                  input=output_from(noaltfasta),
+                                  filter=formatter('(?P<ASSM>bosTau7)\.no_alt\.fa$'),
+                                  output=os.path.join(dir_task_srmidx, 'star_{ASSM[0]}_ensembl-v75', 'SA'),
+                                  extras=[cmd, jobcall])
+    star_bosTau7 = star_bosTau7.mkdir(os.path.join(dir_task_srmidx, 'star_bosTau7_ensembl-v75'))
+
     run_task_srmidx = pipe.merge(task_func=touch_checkfile,
                                  name='task_srmidx',
-                                 input=output_from(bt2_idx),
+                                 input=output_from(bt2_idx, star_hg19, star_mm9, star_bosTau7),
                                  output=os.path.join(dir_task_srmidx, 'run_task_srmidx.chk'))
 
     #
-    # End of: bowtie2 indices
+    # End of: short read mapper indices
     # ================================
 
     # ==========================================
