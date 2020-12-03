@@ -1,7 +1,11 @@
-# refdata
+# Status
+Repository is essentially deprecated and kept for internal purposes. Pipeline code in this repository
+is intended for Ruffus (Python). URLs stated below in the download log may or may not lead to a 404.
+
+## Description
 Collection of scripts and converters assembled as pipeline to process annotation data
 
-# Portal links
+## Portal links
 - ENCODE annotations:   https://www.encodeproject.org/data/annotations
 
 ## Glossary
@@ -25,7 +29,7 @@ Collection of scripts and converters assembled as pipeline to process annotation
 - proximal: higher ranked according to the above schema, but too close to a TSS; could be promoter or enhancer with promoter-like activty
 
 
-# Download log
+## Download log
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/hg19/bigZips/hg19.2bit
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/mm9/bigZips/mm9.2bit
 - 2016-02-10	http://hgdownload.soe.ucsc.edu/goldenPath/bosTau7/bigZips/bosTau7.2bit
